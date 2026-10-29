@@ -96,8 +96,12 @@
   };
   $('close').onclick = () => busy($('close'), async () => {
     if (!confirm(successor ? 'Close this entrance now? Make sure you have saved your next address and passphrase.' : 'No next entrance is prepared. Closing this one requires a new invitation to return. Continue?')) return;
-    await request('/api/close', {});
-    forget('This entrance is closed. Your next entrance, if prepared, keeps its original expiry.');
+    try {
+      await request('/api/close', {});
+      forget('This entrance is closed. Your next entrance, if prepared, keeps its original expiry.');
+    } catch {
+      forget(`Close requested, but confirmation was not received. This page is cleared; the entrance may remain available until ${new Date(expires).toLocaleString()}.`);
+    }
   });
   $('clear').onclick = () => {
     forget('Page cleared. An open entrance still expires at its scheduled time. Clearing this page does not erase browser or network records.');
