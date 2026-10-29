@@ -52,17 +52,18 @@ type Hop struct {
 	coverCount  int
 }
 type Core struct {
-	store    *Store
-	ca       *Authority
-	runtime  Runtime
-	prefix   netip.Prefix
-	ttl      time.Duration
-	mu       sync.Mutex
-	hops     map[string]*Hop
-	closing  bool
-	fleet    []Entrance
-	events   io.Writer
-	eventsMu sync.Mutex
+	store        *Store
+	ca           *Authority
+	runtime      Runtime
+	prefix       netip.Prefix
+	ttl          time.Duration
+	mu           sync.Mutex
+	hops         map[string]*Hop
+	closing      bool
+	fleet        []Entrance
+	events       io.Writer
+	eventsMu     sync.Mutex
+	recentEvents []Event
 }
 
 func reply(w http.ResponseWriter, status int, value any) {

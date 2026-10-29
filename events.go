@@ -7,26 +7,38 @@ import (
 	"time"
 )
 
-// Optional, private demonstration telemetry. It reveals the mapping between
-// entrances, but never records passphrases, bearer tokens or message contents.
+type Event struct {
+	Time         time.Time `json:"time"`
+	Event        string    `json:"event"`
+	Hop          string    `json:"hop,omitempty"`
+	Node         string    `json:"node,omitempty"`
+	Address      string    `json:"address,omitempty"`
+	Participant  string    `json:"participant,omitempty"`
+	Conversation string    `json:"conversation,omitempty"`
+	Bytes        int       `json:"bytes,omitempty"`
+	Detail       string    `json:"detail,omitempty"`
+}
+
+// Private telemetry reveals entrance mappings, never credentials or bodies.
+// The dashboard retains only the latest 100 events from this process.
 func (c *Core) event(h *Hop, kind string, bytes int, detail string) {
-	if c.events == nil {
-		return
-	}
-	e := struct {
-		Time        time.Time `json:"time"`
-		Event       string    `json:"event"`
-		Hop         string    `json:"hop"`
-		Node        string    `json:"node"`
-		Address     string    `json:"address"`
-		Participant string    `json:"participant"`
-		Bytes       int       `json:"bytes,omitempty"`
-		Detail      string    `json:"detail,omitempty"`
-	}{time.Now().UTC(), kind, h.ID[:12], h.Node, strings.TrimPrefix(h.Invitation.URL, "https://"), h.Person.Name, bytes, detail}
+	c.recordEvent(Event{Event: kind, Hop: h.ID[:min(12, len(h.ID))], Node: h.Node,
+		Address: strings.TrimPrefix(h.Invitation.URL, "https://"), Participant: h.Person.Name,
+		Conversation: h.Room, Bytes: bytes, Detail: detail})
+}
+
+func (c *Core) recordEvent(e Event) {
 	c.eventsMu.Lock()
-	err := json.NewEncoder(c.events).Encode(e)
-	c.eventsMu.Unlock()
-	if err != nil {
-		log.Print("Could not write demonstration event")
+	defer c.eventsMu.Unlock()
+	e.Time = time.Now().UTC()
+	if len(c.recentEvents) == 100 {
+		copy(c.recentEvents, c.recentEvents[1:])
+		c.recentEvents = c.recentEvents[:99]
+	}
+	c.recentEvents = append(c.recentEvents, e)
+	if c.events != nil {
+		if err := json.NewEncoder(c.events).Encode(e); err != nil {
+			log.Print("Could not write demonstration event")
+		}
 	}
 }
