@@ -13,9 +13,11 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -49,6 +51,9 @@ type node struct {
 	executor, token string
 	mu              sync.Mutex
 	sessions        map[string]*session
+	publicURL       string
+	publicIP        netip.Addr
+	backendPort     uint16
 }
 
 func main() {
@@ -56,6 +61,8 @@ func main() {
 	executor := flag.String("executor", "e96cd359-f488-4cef-a4d1-3a2e1c869739", "executor ID")
 	wasmPath := flag.String("wasm", "/app/.local/relay.wasm", "relay guest")
 	tokenPath := flag.String("token", "/app/.local/runtime.token", "controller bearer token file")
+	publicURL := flag.String("public-url", "", "optional https://public-ip:mapped-port for a dedicated cloud pod")
+	backendPort := flag.Int("backend-port", 0, "the one loopback SSH tunnel port allowed in cloud mode")
 	flag.Parse()
 	wasm, err := os.ReadFile(*wasmPath)
 	if err != nil {
@@ -70,6 +77,9 @@ func main() {
 		fail("configure dispatcher")
 	}
 	n := &node{client: api, wasm: wasm, executor: *executor, token: strings.TrimSpace(string(token)), sessions: map[string]*session{}}
+	if err := n.configureCloud(*publicURL, *backendPort); err != nil {
+		fail("invalid cloud endpoint or backend port")
+	}
 	server := &http.Server{Addr: "127.0.0.1:9100", Handler: http.HandlerFunc(n.serve), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 10 * time.Second, MaxHeaderBytes: 8192}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -110,7 +120,7 @@ func (n *node) serve(w http.ResponseWriter, r *http.Request) {
 	var q request
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&q) != nil || decoder.Decode(new(any)) != io.EOF || !valid(q) {
+	if decoder.Decode(&q) != nil || decoder.Decode(new(any)) != io.EOF || !n.accepts(q) {
 		http.Error(w, `{"error":"invalid session"}`, 400)
 		return
 	}
@@ -125,7 +135,11 @@ func (n *node) serve(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(previous.reply)
 		return
 	}
-	if len(n.sessions) >= 32 {
+	capacity := 32
+	if n.publicURL != "" {
+		capacity = 1
+	}
+	if len(n.sessions) >= capacity {
 		http.Error(w, `{"error":"capacity reached"}`, 503)
 		return
 	}
@@ -150,12 +164,39 @@ func (n *node) serve(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(s.reply)
 }
 func valid(q request) bool {
+	return (&node{}).accepts(q)
+}
+
+func (n *node) configureCloud(raw string, port int) error {
+	if raw == "" && port == 0 {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || port < 1024 || port > 65535 {
+		return errors.New("invalid cloud configuration")
+	}
+	ip, err := netip.ParseAddr(u.Hostname())
+	publicPort, portErr := strconv.Atoi(u.Port())
+	if err != nil || !ip.Is4() || !ip.IsGlobalUnicast() || ip.IsPrivate() || portErr != nil || publicPort < 1 || publicPort > 65535 || u.Host != net.JoinHostPort(ip.String(), u.Port()) {
+		return errors.New("invalid public IPv4 endpoint")
+	}
+	n.publicURL, n.publicIP, n.backendPort = raw, ip, uint16(port)
+	return nil
+}
+
+func (n *node) accepts(q request) bool {
 	id, err := hex.DecodeString(q.ID)
 	if err != nil || len(id) != 16 || q.ID != strings.ToLower(q.ID) || q.TTL < 1 || q.TTL > 1200 {
 		return false
 	}
 	address, err := netip.ParseAddr(q.Address)
-	if err != nil || !netip.MustParsePrefix("fd6d:626f:7800:1::/64").Contains(address) || address.String() != q.Address {
+	if err != nil || address.String() != q.Address {
+		return false
+	}
+	if n.publicURL != "" {
+		return address == n.publicIP && q.Backend == net.JoinHostPort("::1", strconv.Itoa(int(n.backendPort)))
+	}
+	if !netip.MustParsePrefix("fd6d:626f:7800:1::/64").Contains(address) {
 		return false
 	}
 	backend, err := netip.ParseAddrPort(q.Backend)
@@ -172,7 +213,13 @@ func alias(action, address string) error {
 }
 func (n *node) create(ctx context.Context, q request) (_ *session, result error) {
 	deadline := time.Now().Add(time.Duration(q.TTL) * time.Second)
-	batch, err := client.Prepare([]client.Request{{ExecutorID: n.executor, Wasm: n.wasm, Args: []string{q.Backend}, Policy: client.Policy{FloorBW: 1_000_000, CeilBW: 10_000_000, TimeoutMS: int64(q.TTL) * 1000, Addresses: []string{"::1"}, ListenTCP: true}}})
+	backend := q.Backend
+	addresses := []string{"::1"}
+	if n.publicURL != "" {
+		backend = net.JoinHostPort("127.0.0.1", strconv.Itoa(int(n.backendPort)))
+		addresses = append(addresses, "127.0.0.1")
+	}
+	batch, err := client.Prepare([]client.Request{{ExecutorID: n.executor, Wasm: n.wasm, Args: []string{backend}, Policy: client.Policy{FloorBW: 1_000_000, CeilBW: 10_000_000, TimeoutMS: int64(q.TTL) * 1000, Addresses: addresses, ListenTCP: true}}})
 	if err != nil {
 		return nil, err
 	}
@@ -210,15 +257,22 @@ func (n *node) create(ctx context.Context, q request) (_ *session, result error)
 	if !time.Now().Before(deadline) {
 		return nil, context.DeadlineExceeded
 	}
-	if err := alias("add", q.Address); err != nil {
-		return nil, err
+	network, bind, publicURL := "tcp4", "0.0.0.0:8443", n.publicURL
+	if n.publicURL == "" {
+		if err := alias("add", q.Address); err != nil {
+			return nil, err
+		}
+		network, bind = "tcp6", net.JoinHostPort(q.Address, "8443")
+		publicURL = "https://" + bind
 	}
-	listener, err := net.Listen("tcp6", net.JoinHostPort(q.Address, "8443"))
+	listener, err := net.Listen(network, bind)
 	if err != nil {
-		alias("del", q.Address)
+		if n.publicURL == "" {
+			alias("del", q.Address)
+		}
 		return nil, err
 	}
-	s := &session{request: q, reply: reply{URL: "https://" + net.JoinHostPort(q.Address, "8443"), RunID: runID}, deadline: deadline, listener: listener, connections: map[net.Conn]struct{}{}}
+	s := &session{request: q, reply: reply{URL: publicURL, RunID: runID}, deadline: deadline, listener: listener, connections: map[net.Conn]struct{}{}}
 	go s.forward(target)
 	return s, nil
 }
@@ -286,7 +340,9 @@ func (n *node) destroy(id string) error {
 		connection.Close()
 	}
 	s.mu.Unlock()
-	alias("del", s.Address)
+	if n.publicURL == "" {
+		alias("del", s.Address)
+	}
 	if err := n.cancel(s.RunID); err != nil {
 		return err
 	}

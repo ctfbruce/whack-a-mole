@@ -64,3 +64,31 @@ func TestFailedCancellationCannotReviveClosedEndpoint(t *testing.T) {
 		t.Fatalf("closed relay returned %d", w.Code)
 	}
 }
+
+func TestCloudControllerPinsAddressAndOneBackend(t *testing.T) {
+	n := &node{}
+	if err := n.configureCloud("https://203.0.113.20:18843", 29301); err != nil {
+		t.Fatal(err)
+	}
+	good := request{ID: strings.Repeat("a", 32), Address: "203.0.113.20", Backend: "[::1]:29301", TTL: 30}
+	if !n.accepts(good) {
+		t.Fatal("fixed cloud endpoint rejected")
+	}
+	for _, mutate := range []func(*request){
+		func(q *request) { q.Address = "203.0.113.21" },
+		func(q *request) { q.Backend = "[::1]:29302" },
+		func(q *request) { q.Backend = "127.0.0.1:29301" },
+		func(q *request) { q.Backend = "example.org:443" },
+	} {
+		bad := good
+		mutate(&bad)
+		if n.accepts(bad) {
+			t.Fatalf("accepted different endpoint: %+v", bad)
+		}
+	}
+	for _, address := range []string{"http://203.0.113.20:8443", "https://example.org:8443", "https://127.0.0.1:8443", "https://203.0.113.20:8443/path", "https://user@203.0.113.20:8443", "https://203.0.113.20:8443#fragment"} {
+		if (&node{}).configureCloud(address, 29301) == nil {
+			t.Fatalf("accepted cloud endpoint %q", address)
+		}
+	}
+}
