@@ -27,7 +27,8 @@ assets = a.output.parent / 'assets'
 assets.mkdir(exist_ok=True)
 counts = Counter(row.get('event') for row in events)
 labels = {'entry_starting': 'Starting relay', 'entry_ready': 'Entrance ready', 'login': 'Signed in',
-          'message_stored': 'Message stored', 'next_prepared': 'Next entrance prepared', 'entry_closed': 'Entrance retired'}
+          'message_stored': 'Message stored', 'next_prepared': 'Next entrance prepared',
+          'entry_closed': 'Entrance retired', 'cover_response': 'Background response'}
 nodes = ''
 for index, node in enumerate(fleet):
     node_events = [row for row in events if row.get('node') == node['name']]
@@ -38,7 +39,13 @@ for row in events:
     event = row.get('event', '')
     if event not in labels:
         continue
-    detail = f'{row.get("bytes", 0)} application bytes' if event == 'message_stored' else row.get('reason', '')
+    detail = ''
+    if event in ('message_stored', 'cover_response'):
+        detail = f'{row.get("bytes", 0)} application bytes'
+    elif event == 'entry_closed':
+        detail = row.get('detail', row.get('reason', ''))
+    elif event == 'next_prepared':
+        detail = urlparse(row.get('detail', '')).netloc
     timeline += f'<tr><td>{e(row.get("time", ""))}</td><td>{e(labels[event])}</td><td>{e(row.get("node", ""))}</td><td><code>{e(row.get("hop", ""))}</code></td><td>{e(row.get("participant", ""))}</td><td>{e(detail)}</td></tr>'
 buttons, screenshots = '', ''
 for index, step in enumerate(run.get('steps', [])):
