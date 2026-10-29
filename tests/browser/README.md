@@ -1,22 +1,19 @@
 # Browser acceptance
 
-Run on the lab host after the demo has created two invitations. The browser first
-rejects the untrusted lab certificate, then trusts that specific CA in a disposable
-NSS database. HTTPS certificate verification stays enabled throughout.
+With the owned lab running, use `tests/browser/check.sh` on the lab host. It builds
+a cached browser image, creates two fresh private invitations and runs the browser
+on the isolated IPv6 network. It removes its browser container on exit and leaves
+the lab running; test entrances expire normally. Run `demo/run.sh down` afterward.
 
-```sh
-docker build -t ephemeral-mailbox-browser:local -f tests/browser/Dockerfile .
-mkdir -p .local/browser-evidence
-docker run --rm --name ephemeral-mailbox-browser \
-  --label research.ephemeral-mailbox=true \
-  --network ephemeral-mailbox-ipv6 --cpus=2 --memory=2g --pids-limit=256 \
-  -v "$PWD/.local/core/ca.pem:/inputs/ca.pem:ro" \
-  -v "$PWD/.local/invitations.json:/inputs/invitations.json:ro" \
-  -v "$PWD/.local/browser-evidence:/evidence" ephemeral-mailbox-browser:local
-```
+The browser first rejects the untrusted lab certificate, then trusts that specific
+CA in a disposable NSS database. HTTPS verification remains enabled throughout.
 
-Evidence includes screenshots of the test conversation and a bounded JSON summary.
-Keep invitations, screenshots and all evidence private. The runner tests local IPv6
-routing, actual browser login/message exchange, successor continuity and closure,
-HTML escaping, responsive layout, and honest transport-failure handling. It does
-not establish forensic erasure, censorship resistance or public IPv6 reachability.
+Private evidence lives under `.local/browser-evidence`: screenshots of the test
+conversation, a JSON summary and logs. Keep invitations and evidence private.
+Checks cover local IPv6, actual login/message exchange, successor continuity,
+acknowledged close, HTML escaping, responsive layout and transport failures. Named
+UI fault-injection checks also cover delayed preparation, refresh ordering and
+page restoration. Runtime tests separately establish endpoint and relay removal.
+
+This does not establish forensic erasure, censorship resistance or public IPv6
+reachability. Browser restoration is simulated; no forensic claim follows from it.
