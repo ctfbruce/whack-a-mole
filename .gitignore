@@ -2,3 +2,8 @@
 bin/
 node_modules/
 .DS_Store
+.env
+.env.*
+*.key
+__pycache__/
+*.pyc

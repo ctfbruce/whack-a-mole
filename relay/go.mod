@@ -1,4 +1,4 @@
-module ephemeral-mailbox/relay
+module github.com/ctfbruce/whack-a-mole/relay
 
 go 1.26.10
 

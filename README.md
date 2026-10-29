@@ -1,8 +1,11 @@
-# Ephemeral mailbox
+# Whack-a-Mole
 
 A small research prototype: two people exchange messages through temporary
 websites. Each entrance has its own address, passphrase and lifetime. A person can
 prepare their next entrance, close the current one, and continue the same conversation.
+
+Built on [Debuglet](https://github.com/netsec-ethz/debuglet). No app installation
+is required for messaging; the demo browser must trust the test certificate authority.
 
 The native Go core retains messages and serves the browser interface. A real
 Debuglet WebAssembly program forwards the browser's encrypted connection; it does
@@ -28,9 +31,11 @@ hide traffic or erase device records. Read [the threat model](THREAT_MODEL.md).
 Requires Linux amd64, Docker with IPv6 networking, and Git. Initial image and
 dependency downloads need Internet access; the running lab uses an internal network.
 
-Obtain the Debuglet source used by this prototype:
+Clone this repository and the pinned Debuglet source:
 
 ```sh
+git clone https://github.com/ctfbruce/whack-a-mole.git
+cd whack-a-mole
 git clone https://github.com/netsec-ethz/debuglet.git ../debuglet-relay-base
 git -C ../debuglet-relay-base checkout a060c5c03a200feff4ecc17c09d7dcba21e20617
 export DEBUGLET_SOURCE="$(cd ../debuglet-relay-base && pwd)"
@@ -125,6 +130,8 @@ old mailbox; retain your invitation or prepare a successor inside the mailbox.
 - Closing an entrance retires its listener, active connections and guest run.
   Messages remain at the core. Each entrance permits one active login token;
   signing in again invalidates its previous token.
+- If the close response is lost, the page clears its local credentials and reports
+  that closure is unconfirmed. It does not claim that the remote entrance stopped.
 - After a core restart, use `mailbox resume -from <previous-invitations.json>
   -out <new-invitations.json>` with the same `-state` directory. The administrator
   must securely deliver the replacement invitations. Old passphrases do not resume.
@@ -143,6 +150,7 @@ There is no frontend framework or database server.
 | `store.go`, `tls.go` | Atomic private state and local certificate authority |
 | `main.go`, `runtime.go` | Local administrative CLI and runtime connection |
 | `fleet.go`, `events.go` | Remote entrance allocation and optional private telemetry |
+| `welcome.go` | Public first-use enrollment, separate from the private administrator API |
 | `relay/main.go` | Opaque TCP forwarding inside the real WASM guest |
 | `relay/cmd/node/` | Guest submission, IPv6 aliases and connection cleanup |
 | `web/` | Small browser mailbox |
@@ -151,3 +159,18 @@ There is no frontend framework or database server.
 The Go tests exercise actual TLS/HTTP with provisioning replaced by a fixture.
 The Docker browser rehearsal uses the actual dispatcher, executor and WASM relay.
 These are distinct evidence levels; neither is a public-network anonymity test.
+
+For focused development checks on Linux with Go 1.26.10, Python 3 and OpenSSL:
+
+```sh
+go test -race ./...
+(cd relay && go test -race ./cmd/node)
+python3 -m unittest discover -s traffic -p 'test_*.py'
+```
+
+Keep keys, invitations, mailbox state and rehearsal output under the ignored
+`.local/` directory. Do not publish them alongside the source.
+
+## License
+
+Apache-2.0. Debuglet and other dependencies retain their own licenses.
