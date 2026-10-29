@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  let token = '', name = '', expires = 0, generation = 0, successor = false;
+  let token = '', name = '', expires = 0, generation = 0, refreshVersion = 0, successor = false;
   const active = new Set();
   const notice = (text = '', error = false) => { $('notice').textContent = text; $('notice').classList.toggle('error', error); };
   function forget(message) {
@@ -48,7 +48,8 @@
     if (!seconds) forget('This entrance has expired. Use your next address and passphrase if you prepared one.');
   }
   async function refresh() {
-    const data = await request('/api/messages');
+    const version = ++refreshVersion, data = await request('/api/messages');
+    if (version !== refreshVersion) return;
     const items = data.messages.map(message => {
       const item = document.createElement('li'), sender = document.createElement('strong');
       const time = document.createElement('time'), text = document.createElement('p');
