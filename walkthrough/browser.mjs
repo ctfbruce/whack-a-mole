@@ -10,7 +10,8 @@ assert(invitations.length === 2 && Number.isInteger(hops) && hops >= 1 && hops <
 assert(Number.isFinite(hold) && hold >= 0 && hold <= 60 && (!hold || sessionFile));
 await mkdir(output, { recursive: true });
 await writeFile(`${output}/message-trace.jsonl`, '', { mode: 0o600, flag: 'wx' });
-await writeFile(`${output}/walkthrough.json`, '', { mode: 0o600, flag: 'wx' });
+await writeFile(`${output}/walkthrough.json`, JSON.stringify({ passed: false, started_at: started, steps: [],
+  error: 'Rehearsal has not completed.' }), { mode: 0o600, flag: 'wx' });
 const browser = await chromium.launch({ args: ['--no-sandbox', '--no-proxy-server', '--disable-background-networking'] });
 const contexts = [], steps = [], retiredEntrances = [], credentials = invitations.map(i => i.passphrase), hosts = new Set();
 const pendingResponses = new Set();
@@ -56,6 +57,8 @@ async function snapshot(view, title, url) {
   const file = `step-${String(steps.length + 1).padStart(2, '0')}.png`;
   await view.screenshot({ path: `${output}/${file}`, fullPage: true, mask: [view.locator('#next-passphrase')] });
   steps.push({ time: new Date().toISOString(), title, address: new URL(url).host, image: file });
+  await writeFile(`${output}/walkthrough.json`, JSON.stringify({ passed: false, started_at: started,
+    distinct_addresses: hosts.size, steps, retired_entrances: retiredEntrances, error: 'Rehearsal has not completed.' }, null, 2));
 }
 async function login(view, invitation) {
   const response = await view.goto(invitation.url, { waitUntil: 'networkidle' });
@@ -119,6 +122,7 @@ try {
       assert(events.some(event => event.event === 'entry_closed' && event.detail === 'explicit' &&
         event.address === new URL(retired).host && event.time >= closedAfter), 'Core must confirm explicit retirement');
     }, 30000);
+    await source.context().close();
     source = await page(); current = next; await login(source, current);
     await until(async () => assert.match(await source.locator('#messages').innerText(), /Demo reply: confirmed/));
     await send(source, `Demo continuity check ${index + 1}: same conversation, different entrance.`);
@@ -130,7 +134,7 @@ try {
       'Old entrance must refuse or time out, not fail TLS verification');
     retiredEntrances.push({ address: new URL(retired).host, closed_after: closedAfter, time: new Date().toISOString(),
       outcome: /Timeout|TIMED_OUT/.test(failure) ? 'navigation_timeout' : 'connection_failure' });
-    await probe.close();
+    await probe.context().close();
   }
   await reporter.getByRole('button', { name: 'Refresh', exact: true }).click();
   await until(async () => assert.match(await reporter.locator('#messages').innerText(), new RegExp(`continuity check ${hops}:`)));
@@ -147,7 +151,7 @@ try {
   let notice = '';
   if (source && !source.isClosed()) {
     notice = await source.locator('#notice').innerText().catch(() => '');
-    await snapshot(source, 'Stopped · The next entrance could not be prepared', current.url).catch(() => {});
+    await snapshot(source, 'Stopped · Rehearsal interrupted', current.url).catch(() => {});
   }
   for (const credential of credentials) if (credential) notice = notice.replaceAll(credential, '[redacted]');
   await writeFile(`${output}/walkthrough.json`, JSON.stringify({ passed: false, started_at: started,

@@ -97,7 +97,7 @@ retirement_matches = len(retired) == run.get('handoffs') and all(any(
     for event in closed) for row in retired)
 status = 'Verified rehearsal' if run.get('passed') and retirement_matches else 'Incomplete rehearsal'
 status_class = 'status' if status == 'Verified rehearsal' else 'status incomplete'
-failure = '' if run.get('passed') else '<p class="limits">Stopped before the complete tour: ' + e(run.get('notice') or run.get('error', 'Evidence incomplete').splitlines()[0]) + '</p>'
+failure = '' if run.get('passed') else '<p class="limits">Stopped before the complete tour: ' + e(run.get('error', 'Evidence incomplete').splitlines()[0]) + '</p>'
 failed_nodes = sorted({row.get('node', 'Unknown node') for row in events if row.get('detail') == 'provision_failure'
                       and begin <= stamp(row['time']) <= end})
 if failed_nodes:
