@@ -59,7 +59,7 @@ epoch_seconds = 1
 [network]
 packet_counter = "fallback"
 disable_scion_environment = true
-public_host = "::1"
+public_host = "127.0.0.1"
 public_ports = "20000-20063"
 [network.policy]
 local_targets = true

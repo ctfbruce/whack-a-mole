@@ -217,7 +217,7 @@ func (n *node) create(ctx context.Context, q request) (_ *session, result error)
 	addresses := []string{"::1"}
 	if n.publicURL != "" {
 		backend = net.JoinHostPort("127.0.0.1", strconv.Itoa(int(n.backendPort)))
-		addresses = append(addresses, "127.0.0.1")
+		addresses = []string{"127.0.0.1"}
 	}
 	batch, err := client.Prepare([]client.Request{{ExecutorID: n.executor, Wasm: n.wasm, Args: []string{backend}, Policy: client.Policy{FloorBW: 1_000_000, CeilBW: 10_000_000, TimeoutMS: int64(q.TTL) * 1000, Addresses: addresses, ListenTCP: true}}})
 	if err != nil {
@@ -251,7 +251,11 @@ func (n *node) create(ctx context.Context, q request) (_ *session, result error)
 	}
 	// Never forward to an unexpected endpoint supplied by the local dispatcher.
 	peer, err := netip.ParseAddrPort(target)
-	if err != nil || peer.Addr() != netip.IPv6Loopback() || peer.Port() < 20000 || peer.Port() > 20063 {
+	expectedPeer := netip.IPv6Loopback()
+	if n.publicURL != "" {
+		expectedPeer = netip.MustParseAddr("127.0.0.1")
+	}
+	if err != nil || peer.Addr() != expectedPeer || peer.Port() < 20000 || peer.Port() > 20063 {
 		return nil, errors.New("invalid guest listener")
 	}
 	if !time.Now().Before(deadline) {
@@ -300,7 +304,7 @@ func (s *session) forward(target string) {
 		s.mu.Unlock()
 		go func() {
 			defer func() { <-capacity; peer.Close(); s.mu.Lock(); delete(s.connections, peer); s.mu.Unlock() }()
-			upstream, err := net.DialTimeout("tcp6", target, 2*time.Second)
+			upstream, err := net.DialTimeout("tcp", target, 2*time.Second)
 			if err != nil {
 				return
 			}
