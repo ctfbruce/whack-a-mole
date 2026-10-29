@@ -1,12 +1,14 @@
 # Ephemeral mailbox
 
-A small research prototype: two people exchange messages through temporary IPv6
+A small research prototype: two people exchange messages through temporary
 websites. Each entrance has its own address, passphrase and lifetime. A person can
 prepare their next entrance, close the current one, and continue the same conversation.
 
-The trusted core retains messages. A real Debuglet WebAssembly program forwards
-the browser's encrypted connection; it does not decrypt messages. This project is
-separate from Debuglet and changes none of its source.
+The native Go core retains messages and serves the browser interface. A real
+Debuglet WebAssembly program forwards the browser's encrypted connection; it does
+not decrypt messages. This project is separate from Debuglet and changes none of
+its source. The default lab uses local IPv6; an optional public rehearsal rotates
+among ten CPU pods with distinct public IPv4 addresses.
 
 ```text
 Browser → random IPv6 address → TCP bridge → Debuglet WASM relay → trusted core
@@ -15,7 +17,7 @@ Browser → random IPv6 address → TCP bridge → Debuglet WASM relay → trust
 
 The small native bridge is necessary because Debuglet's local listener policy
 accepts loopback peers. The Docker lab supplies IPv6 addressing and isolation;
-Debuglet supplies the bounded guest runtime. No host ports are published.
+Debuglet supplies the bounded guest runtime. The local lab publishes no host ports.
 
 **This demonstrates a mechanism, not a safe whistleblowing service.** The core
 reads messages; the active website is identifiable; changing addresses does not
@@ -70,6 +72,24 @@ including plaintext messages, keys and invitations. Removal is not secure erasur
 The supervisor also limits the running lab to four hours; after that, use `down`
 to remove the stopped container and network.
 
+## Optional public rehearsal
+
+Follow [the remote relay guide](cloud/README.md) to use ten owned CPU pods. Each pod
+runs a Debuglet executor and relay controller; the core and private dispatcher stay
+on the trusted controller host. Browser TLS passes through the real WASM guest and
+an SSH tunnel, terminating only at the core. The test browser must trust the private
+CA; do not bypass verification.
+
+This emulates address changes using a fixed public IPv4 fleet, not public IPv6 or
+a fresh VM per session. Occupied slots are excluded from allocation; failed cleanup
+keeps a slot reserved. Pods remain billable until provider deletion is confirmed.
+
+Authenticated `/api/cover` requests support bounded synthetic traffic profiles;
+they do not store messages or demonstrate indistinguishability. Optional `-events`
+logging records entry changes, participant labels, timestamps and byte counts,
+but no credentials or message bodies. This private log reveals the relationship
+between entrances and must not be published.
+
 ## Lifetime and recovery
 
 - Default entrance lifetime: ten minutes. Set `SESSION_TTL=5m` before `up` to change
@@ -97,10 +117,11 @@ There is no frontend framework or database server.
 | `core.go` | Entry lifecycle, authentication, mailbox API and successor handoff |
 | `store.go`, `tls.go` | Atomic private state and local certificate authority |
 | `main.go`, `runtime.go` | Local administrative CLI and runtime connection |
+| `fleet.go`, `events.go` | Remote entrance allocation and optional private telemetry |
 | `relay/main.go` | Opaque TCP forwarding inside the real WASM guest |
 | `relay/cmd/node/` | Guest submission, IPv6 aliases and connection cleanup |
 | `web/` | Small browser mailbox |
-| `demo/`, `tests/browser/` | Isolated lab and reproducible acceptance checks |
+| `demo/`, `tests/browser/`, `cloud/` | Local lab, browser checks and remote setup |
 
 The Go tests exercise actual TLS/HTTP with provisioning replaced by a fixture.
 The Docker browser rehearsal uses the actual dispatcher, executor and WASM relay.

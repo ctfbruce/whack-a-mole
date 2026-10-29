@@ -41,6 +41,8 @@ func run(args []string) error {
 	out := flags.String("out", ".local/invitations.json", "private invitation output file")
 	from := flags.String("from", ".local/invitations.json", "existing invitations for resume")
 	names := flags.String("names", "Source,Reporter", "two participant names")
+	fleetPath := flags.String("fleet", "", "private configuration for owned remote entrances")
+	eventsPath := flags.String("events", "", "optional private JSONL demonstration log")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -82,14 +84,36 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	nodeToken, err := os.ReadFile(*runtimeToken)
-	if err != nil {
-		return err
+	c := &Core{store: store, ca: ca, prefix: prefix.Masked(), ttl: *ttl, hops: make(map[string]*Hop)}
+	if *fleetPath != "" {
+		c.fleet, c.runtime, err = loadFleet(*fleetPath)
+		if err != nil {
+			return err
+		}
+	} else {
+		nodeToken, readErr := os.ReadFile(*runtimeToken)
+		if readErr != nil {
+			return readErr
+		}
+		if len(strings.TrimSpace(string(nodeToken))) < 32 {
+			return errors.New("runtime token is too short")
+		}
+		c.runtime = &RemoteRuntime{URL: *runtimeURL, Token: strings.TrimSpace(string(nodeToken)), Client: runtimeClient()}
 	}
-	if len(strings.TrimSpace(string(nodeToken))) < 32 {
-		return errors.New("runtime token is too short")
+	if *eventsPath != "" {
+		if err := os.MkdirAll(filepath.Dir(*eventsPath), 0700); err != nil {
+			return err
+		}
+		file, err := os.OpenFile(*eventsPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		if err := file.Chmod(0600); err != nil {
+			return err
+		}
+		c.events = file
 	}
-	c := &Core{store: store, ca: ca, runtime: &RemoteRuntime{URL: *runtimeURL, Token: strings.TrimSpace(string(nodeToken)), Client: &http.Client{Timeout: 50 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, prefix: prefix.Masked(), ttl: *ttl, hops: make(map[string]*Hop)}
 	server := &http.Server{Addr: *listen, Handler: c.admin(adminToken), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 100 * time.Second, MaxHeaderBytes: 8192}
 	listener, err := net.Listen("tcp", *listen)
 	if err != nil {

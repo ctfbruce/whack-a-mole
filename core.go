@@ -35,27 +35,35 @@ type Invitations struct {
 }
 type Hop struct {
 	ID, Room    string
+	Node        string
 	Person      Person
 	Invitation  Invitation
 	pass, token [32]byte
 	server      *http.Server
 	mu          sync.Mutex
 	nextMu      sync.Mutex
+	cleanupMu   sync.Mutex
 	next        *Invitation
 	failures    int
 	window      time.Time
 	closed      bool
 	timer       *time.Timer
+	coverWindow time.Time
+	coverCount  int
 }
 type Core struct {
-	store   *Store
-	ca      *Authority
-	runtime Runtime
-	prefix  netip.Prefix
-	ttl     time.Duration
-	mu      sync.Mutex
-	hops    map[string]*Hop
-	closing bool
+	store    *Store
+	ca       *Authority
+	runtime  Runtime
+	prefix   netip.Prefix
+	ttl      time.Duration
+	mu       sync.Mutex
+	hops     map[string]*Hop
+	closing  bool
+	fleet    []Entrance
+	cursor   int
+	events   io.Writer
+	eventsMu sync.Mutex
 }
 
 func reply(w http.ResponseWriter, status int, value any) {
@@ -69,7 +77,10 @@ func problem(w http.ResponseWriter, status int, message string) {
 	reply(w, status, map[string]string{"error": message})
 }
 func readJSON(w http.ResponseWriter, r *http.Request, value any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	return readJSONLimit(w, r, value, 8192)
+}
+func readJSONLimit(w http.ResponseWriter, r *http.Request, value any, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(value); err != nil {
@@ -97,23 +108,23 @@ func (c *Core) issue(ctx context.Context, room string, person Person) (Invitatio
 		c.mu.Unlock()
 		return Invitation{}, errors.New("session capacity reached")
 	}
-	bits := c.prefix.Addr().As16()
-	if _, err := rand.Read(bits[8:]); err != nil {
+	entrance, err := c.entrance()
+	if err != nil {
 		c.mu.Unlock()
 		return Invitation{}, err
 	}
-	ip := netip.AddrFrom16(bits)
-	inv := Invitation{Name: person.Name, Participant: person.ID, URL: "https://" + net.JoinHostPort(ip.String(), "8443"), Passphrase: randomToken(), ExpiresAt: time.Now().Add(c.ttl).UTC()}
-	h := &Hop{ID: randomToken()[:32], Room: room, Person: person, Invitation: inv, pass: sha256.Sum256([]byte(inv.Passphrase))}
+	ip := entrance.ip
+	inv := Invitation{Name: person.Name, Participant: person.ID, URL: entrance.URL, Passphrase: randomToken(), ExpiresAt: time.Now().Add(c.ttl).UTC()}
+	h := &Hop{ID: randomToken()[:32], Room: room, Node: entrance.Name, Person: person, Invitation: inv, pass: sha256.Sum256([]byte(inv.Passphrase))}
 	h.Invitation.Passphrase = ""
 	h.mu.Lock()
 	c.hops[h.ID] = h
 	c.mu.Unlock()
-	var err error
+	c.event(h, "entry_starting", 0, "")
 	defer func() {
 		h.mu.Unlock()
 		if err != nil {
-			c.retire(h)
+			c.retire(h, "provision_failure")
 		}
 	}()
 	var cert tls.Certificate
@@ -122,7 +133,7 @@ func (c *Core) issue(ctx context.Context, room string, person Person) (Invitatio
 		return Invitation{}, err
 	}
 	var listener net.Listener
-	listener, err = net.Listen("tcp6", "[::1]:0")
+	listener, err = net.Listen("tcp6", entrance.Backend)
 	if err != nil {
 		return Invitation{}, err
 	}
@@ -141,14 +152,19 @@ func (c *Core) issue(ctx context.Context, room string, person Person) (Invitatio
 		err = errors.New("entry expired during startup")
 		return Invitation{}, err
 	}
-	h.timer = time.AfterFunc(time.Until(inv.ExpiresAt), func() { c.retire(h) })
+	h.timer = time.AfterFunc(time.Until(inv.ExpiresAt), func() { c.retire(h, "expired") })
+	c.event(h, "entry_ready", 0, "")
 	return inv, nil
 }
 
-func (c *Core) retire(h *Hop) {
+func (c *Core) retire(h *Hop, reason string) {
 	h.mu.Lock()
 	if h.closed {
+		if h.timer != nil {
+			h.timer.Stop()
+		}
 		h.mu.Unlock()
+		c.cleanup(h, reason)
 		return
 	}
 	h.closed = true
@@ -163,10 +179,34 @@ func (c *Core) retire(h *Hop) {
 	if server != nil {
 		_ = server.Close()
 	}
+	c.cleanup(h, reason)
+}
+
+func (c *Core) cleanup(h *Hop, reason string) {
+	h.cleanupMu.Lock()
+	defer h.cleanupMu.Unlock()
+	c.mu.Lock()
+	present := c.hops[h.ID] == h
+	c.mu.Unlock()
+	if !present {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := c.runtime.Stop(ctx, h.ID); err != nil {
 		log.Print("Entry cleanup failed; runtime lifetime remains bounded")
+		c.event(h, "cleanup_pending", 0, reason)
+		c.mu.Lock()
+		closing := c.closing
+		c.mu.Unlock()
+		if !closing {
+			h.mu.Lock()
+			h.timer = time.AfterFunc(5*time.Second, func() { c.retire(h, reason) })
+			h.mu.Unlock()
+		}
+		return // Keep the public-IP slot reserved until DELETE is confirmed.
+	} else {
+		c.event(h, "entry_closed", 0, reason)
 	}
 	c.mu.Lock()
 	delete(c.hops, h.ID)
@@ -183,7 +223,7 @@ func (c *Core) close() {
 	var wg sync.WaitGroup
 	for _, h := range hops {
 		wg.Add(1)
-		go func(h *Hop) { defer wg.Done(); c.retire(h) }(h)
+		go func(h *Hop) { defer wg.Done(); c.retire(h, "shutdown") }(h)
 	}
 	wg.Wait()
 }
@@ -249,6 +289,7 @@ func (c *Core) serveHop(h *Hop, w http.ResponseWriter, r *http.Request) {
 		}
 		token := randomToken()
 		h.token = sha256.Sum256([]byte(token))
+		c.event(h, "login", 0, "")
 		reply(w, 200, map[string]any{"token": token, "name": h.Person.Name, "expires_at": h.Invitation.ExpiresAt})
 		return
 	}
@@ -260,6 +301,34 @@ func (c *Core) serveHop(h *Hop, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.Method + " " + r.URL.Path {
+	case "POST /api/cover":
+		var input struct {
+			ResponseBytes int    `json:"response_bytes"`
+			Padding       string `json:"padding"`
+		}
+		if !readJSONLimit(w, r, &input, 65536) {
+			return
+		}
+		if input.ResponseBytes < 0 || input.ResponseBytes > 262144 {
+			problem(w, 400, "Response size out of bounds")
+			return
+		}
+		h.mu.Lock()
+		if time.Since(h.coverWindow) >= time.Second {
+			h.coverWindow, h.coverCount = time.Now(), 0
+		}
+		allowed := h.coverCount < 5
+		h.coverCount++
+		h.mu.Unlock()
+		if !allowed {
+			problem(w, 429, "Cover request rate exceeded")
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		n, err := io.CopyN(w, rand.Reader, int64(input.ResponseBytes))
+		if err == nil {
+			c.event(h, "cover_response", int(n), "application bytes")
+		}
 	case "GET /api/messages":
 		reply(w, 200, map[string]any{"messages": c.store.messages(h.Room)})
 	case "POST /api/messages":
@@ -279,6 +348,7 @@ func (c *Core) serveHop(h *Hop, w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(w, 201, message)
+		c.event(h, "message_stored", len(input.Text), "")
 	case "POST /api/next":
 		h.nextMu.Lock()
 		defer h.nextMu.Unlock()
@@ -309,12 +379,13 @@ func (c *Core) serveHop(h *Hop, w http.ResponseWriter, r *http.Request) {
 				}
 				c.mu.Unlock()
 				if orphan != nil {
-					c.retire(orphan)
+					c.retire(orphan, "parent_expired")
 				}
 				problem(w, 410, "Session expired")
 				return
 			}
 			h.next = &next
+			c.event(h, "next_prepared", 0, next.URL)
 		}
 		reply(w, 200, h.next)
 	case "POST /api/close":
@@ -322,7 +393,7 @@ func (c *Core) serveHop(h *Hop, w http.ResponseWriter, r *http.Request) {
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-		go c.retire(h)
+		go c.retire(h, "explicit")
 	default:
 		problem(w, 404, "Not found")
 	}
@@ -365,7 +436,7 @@ func (c *Core) admin(token string) http.Handler {
 					}
 					c.mu.Unlock()
 					for _, hop := range partial {
-						c.retire(hop)
+						c.retire(hop, "conversation_failed")
 					}
 					c.store.mu.Lock()
 					cleanupErr := c.store.save(id, nil)

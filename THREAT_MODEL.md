@@ -1,24 +1,25 @@
 # Threat model
 
-This is a local research prototype, not a service ready for sensitive disclosures.
-It tests whether a browser can exchange messages through an expiring IPv6 entry
-point, then move to a new entry while its conversation stays at a trusted core.
-It does not establish anonymity or censorship resistance.
+This is a research prototype, not a service ready for sensitive disclosures.
+It tests messaging through expiring entries: local IPv6 addresses, or an optional
+ten-pod public IPv4 fleet. Conversations stay at a trusted core while entries change.
+Neither mode establishes anonymity or censorship resistance.
 
 ## What is trusted
 
 - The core, its administrator, and its host are trusted with message plaintext,
   participant identities, session credentials, and the mapping between entries.
-- Initial invitations and the lab CA certificate arrive through an authentic,
+- Initial invitations and the private CA certificate arrive through an authentic,
   confidential channel. This prototype does not solve that bootstrap problem.
 - The browser, operating system, and user device are uncompromised. The browser
-  validates the entry's IPv6 address against its certificate and trusts only the
-  intended lab CA for this test. Certificate warnings must not be bypassed.
+  validates the entry's IP address against its certificate and trusts the intended
+  private CA for this test. Certificate warnings must not be bypassed.
 - The core supplies the browser's JavaScript. A malicious or compromised core
   could alter that code or read messages; transport encryption cannot prevent it.
-- The local runtime controller, Debuglet control plane, container administrator,
-  and lab host are trusted to provision and retire entries. A privileged operator
-  on this shared host is not an untrusted relay: it can access the core's files.
+- Runtime controllers, the Debuglet dispatcher, pod administrators, and the lab
+  host are trusted to provision, constrain and retire entries. An administrator
+  of the core host can read its files. Remote pods receive neither mailbox state
+  nor core TLS keys, but their operators see metadata and can disrupt forwarding.
 
 ## Data path
 
@@ -28,9 +29,11 @@ Browser -- IPv6 --> native bridge --> Debuglet WASM relay --> core
 ```
 
 The bridge and real Debuglet guest forward bytes without terminating browser TLS.
-The core terminates TLS using a short-lived certificate for that entry's IPv6
-address. The native bridge is necessary because the current Debuglet local-target
-policy accepts loopback peers, not the lab's ULA ingress address.
+The native Go core terminates TLS using a short-lived certificate for the entry's
+IP address. In the local lab, a bridge admits ULA traffic to Debuglet's loopback
+listener. In the public rehearsal, a pod's mapped TCP port reaches its real WASM
+relay, which forwards through an SSH tunnel to the core. Control APIs are reached
+through authenticated loopback SSH forwards, not exposed public HTTP listeners.
 
 An adversary restricted to forwarding or observing this path can see connection
 metadata and interrupt service. With uncompromised keys and successful certificate
@@ -44,12 +47,13 @@ the two correspondents**. The core reads and stores their messages.
   browser cannot select an arbitrary conversation or sender identity.
 - After login, a bearer token authorizes that entry's requests. Possessing an
   invitation or token grants its access; these are credentials, not identity proof.
-- Messages are retained at the core across entry changes. The successor has a new
-  random IPv6 address and passphrase; repeated requests on one entry return the
-  same successor. The successor's lifetime starts when it is prepared.
+- Messages are retained across entry changes. A successor uses a random local IPv6
+  address or an available fleet IP, plus a new passphrase. Repeated requests on one
+  entry return the same successor, whose lifetime starts when it is prepared.
 - Closing or expiring an entry retires its listener and existing connections.
-  Runtime expiry bounds its life even if normal cleanup fails. Core restart
-  invalidates old sessions; an administrator must deliver fresh invitations.
+  Runtime expiry bounds its life even if normal cleanup fails. A fleet slot stays
+  reserved until cleanup is confirmed. Core restart invalidates old sessions;
+  an administrator must deliver fresh invitations.
 - The page uses no third-party resources, persistent browser storage, or cookies.
   Credentials stay in page memory and are not placed in URLs. Responses request
   `no-store`; these choices reduce retention, not guarantee its absence.
@@ -66,7 +70,10 @@ These are design properties to check in the rehearsal, not a security audit.
 An observer can record source and destination IPs, packet sizes, timing, and
 connection duration. A relay can correlate its ingress and egress. A powerful
 observer may correlate sessions despite their changing destination addresses.
-There is no mixing, cover traffic, or demonstrated traffic mimicry.
+There is no mixing or demonstrated traffic mimicry. Optional authenticated
+synthetic traffic varies application sizes and timing; it is not a validated
+cover-traffic defense. Private event logs deliberately link entries to participant
+labels and record timing and byte counts, though not credentials or message bodies.
 
 The public entry page is recognisable without a passphrase. An adversary that
 discovers an active address can fetch it, block it, or deny service. Random address
@@ -85,13 +92,14 @@ prove that the core did not save the message. Re-sending can create duplicates.
 
 ## Local proof versus an Internet service
 
-The demo uses `fd6d:626f:7800:1::/64`, a locally routed IPv6 ULA prefix, and a private
-lab CA installed only in the test client's trust store. These addresses are not
-public Internet destinations, and ordinary browsers do not trust this CA by default.
+The local demo uses `fd6d:626f:7800:1::/64`, a locally routed IPv6 ULA prefix. These
+addresses are not public Internet destinations. The optional cloud rehearsal uses
+ten distinct public IPv4 addresses, reusing idle pods instead of allocating a new
+VM per session. Both use a private CA that ordinary browsers do not trust by default.
 
-Public deployment would need routed address space, authenticated browser trust,
-reachability, independent-host isolation, and a separate operational threat model.
+An operational service would need browser trust distribution, availability and
+isolation validation, and a separate operational threat model.
 Debuglet starts guest programs on existing executors; it does not supply a fresh
 public IP address per program. IPv6 address changes alone do not hide the containing
-network or make blocking costly. The lab establishes functional relay and session
-behaviour only, not safety for journalists or whistleblowers.
+network or make blocking costly. These rehearsals test functional relay and session
+behaviour, not safety for journalists or whistleblowers.
