@@ -11,6 +11,7 @@ assert(Number.isFinite(hold) && hold >= 0 && hold <= 60 && (!hold || sessionFile
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ args: ['--no-sandbox', '--no-proxy-server', '--disable-background-networking'] });
 const contexts = [], steps = [], credentials = invitations.map(i => i.passphrase), hosts = new Set();
+const pendingResponses = new Set();
 let trace = Promise.resolve(), requestID = 0;
 const requests = new WeakMap();
 function record(row) {
@@ -28,13 +29,14 @@ async function page() {
   context.on('response', response => {
     const data = requests.get(response.request());
     if (!data) return;
-    trace = trace.then(async () => {
+    const pending = (async () => {
       let size = 0, outcome = `http_${response.status()}`;
       try { size = (await response.body()).length; } catch { outcome = 'body_unavailable'; }
-      await appendFile(`${output}/message-trace.jsonl`, JSON.stringify({ elapsed_s: Date.now() / 1000 - started,
+      record({ elapsed_s: Date.now() / 1000 - started,
         direction: 'rx', app_bytes: size, latency_ms: Date.now() - data.at, outcome,
-        request_id: data.request_id, kind: 'message', profile: 'mailbox' }) + '\n');
-    });
+        request_id: data.request_id });
+    })();
+    pendingResponses.add(pending); pending.finally(() => pendingResponses.delete(pending));
   });
   return context.newPage();
 }
@@ -114,6 +116,7 @@ try {
   const result = { passed: true, started_at: started, distinct_addresses: hosts.size, handoffs: hops, steps,
     checks: ['Verified browser TLS', 'Two-person exchange', 'Distinct pod on each handoff', 'History retained', 'Retired entrance unreachable'],
     limitation: 'Application body byte counts, not encrypted wire bytes. This does not establish traffic indistinguishability.' };
+  await Promise.all(pendingResponses); await trace;
   await writeFile(`${output}/walkthrough.json`, JSON.stringify(result, null, 2));
   console.log(JSON.stringify({ passed: true, distinct_addresses: hosts.size, handoffs: hops }));
 } catch (error) {
@@ -123,5 +126,6 @@ try {
   console.error(message); process.exitCode = 1;
 } finally {
   if (sessionFile) await unlink(sessionFile).catch(() => {});
-  await Promise.all(contexts.map(context => context.close())); await browser.close(); await trace;
+  await Promise.all(contexts.map(context => context.close())); await browser.close();
+  await Promise.all(pendingResponses); await trace;
 }
