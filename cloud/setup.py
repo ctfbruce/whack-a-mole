@@ -14,6 +14,7 @@ import secrets
 import socket
 import shlex
 import subprocess
+import sys
 import time
 import uuid
 import urllib.error
@@ -116,22 +117,28 @@ def install(index, pod, args, expires_at):
     target = 'root@' + pod['public_ip']
     # Tunnels are independent of this shell; provider expiry terminates their peer.
     pidfile = folder / 'tunnel.pid'
-    if pidfile.exists():
-        pid = int(pidfile.read_text())
+    supervisor_pidfile = folder / 'tunnel-supervisor.pid'
+    for recorded in (supervisor_pidfile, pidfile):
+        if not recorded.exists():
+            continue
+        pid = int(recorded.read_text())
         try:
             os.kill(pid, 0)
         except ProcessLookupError:
-            pidfile.unlink()
+            recorded.unlink()
         else:
             raise RuntimeError('A tunnel is already recorded; inspect it before rerunning setup')
     with (folder / 'tunnel.log').open('ab') as log:
-        process = subprocess.Popen(options + ['-N', '-o', 'ExitOnForwardFailure=yes',
+        command = options + ['-N', '-o', 'ExitOnForwardFailure=yes',
             '-L', f'127.0.0.1:{29401 + index}:127.0.0.1:9100',
             '-R', '127.0.0.1:19000:127.0.0.1:29000',
             '-R', '127.0.0.1:19001:127.0.0.1:29001',
-            '-R', f'127.0.0.1:{29301 + index}:[::1]:{29301 + index}', target],
+            '-R', f'127.0.0.1:{29301 + index}:[::1]:{29301 + index}', target]
+        process = subprocess.Popen([sys.executable, str(Path(__file__).with_name('tunnel.py')),
+            '--expires-at', str(expires_at), '--pid-file', str(pidfile),
+            '--health-url', node['runtime_url'] + '/sessions', '--', *command],
             stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
-    save(pidfile, str(process.pid) + '\n')
+    save(supervisor_pidfile, str(process.pid) + '\n')
     for _ in range(40):
         if process.poll() is not None:
             raise RuntimeError('SSH tunnel failed; inspect its private log')

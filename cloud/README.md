@@ -45,6 +45,14 @@ python3 cloud/setup.py --state /private/provider-state \
 ```
 
 It copies verified binaries, launches a supervisor and creates SSH tunnels.
+Each SSH tunnel reconnects with bounded backoff until the original absolute
+fleet deadline. Two failed unauthenticated controller checks trigger reconnect
+even if SSH remains alive; healthy controllers return 401 before taking any
+session lock. A live process alone is not a health check; fleet publication
+still requires an authenticated controller response. `tunnel.pid` records the
+current SSH child and `tunnel-supervisor.pid` its lifetime supervisor. Cleanup
+must stop the supervisor as well as the child; terminating the supervisor also
+terminates its child, including after a forced supervisor kill on Linux.
 Core configuration is `/private/mailbox-fleet/fleet.json`. Core listens on
 `[::1]:29301` … `29310`; node controllers are available through local forwarded
 ports `29401` … `29410`. Controller tokens and invitation passphrases are
