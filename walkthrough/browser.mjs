@@ -43,8 +43,8 @@ async function page() {
   });
   return context.newPage();
 }
-async function until(check) {
-  const deadline = Date.now() + 12000;
+async function until(check, milliseconds = 12000) {
+  const deadline = Date.now() + milliseconds;
   while (true) {
     try { await check(); return; } catch (error) {
       if (Date.now() >= deadline) throw error;
@@ -114,6 +114,11 @@ try {
     await source.getByRole('button', { name: 'Close this session', exact: true }).click();
     await until(async () => assert.equal(await source.locator('#mailbox').isVisible(), false));
     const retired = current.url;
+    await until(async () => {
+      const events = (await readFile(`${inputs}/events.jsonl`, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      assert(events.some(event => event.event === 'entry_closed' && event.detail === 'explicit' &&
+        event.address === new URL(retired).host && event.time >= closedAfter), 'Core must confirm explicit retirement');
+    }, 30000);
     source = await page(); current = next; await login(source, current);
     await until(async () => assert.match(await source.locator('#messages').innerText(), /Demo reply: confirmed/));
     await send(source, `Demo continuity check ${index + 1}: same conversation, different entrance.`);
@@ -121,7 +126,8 @@ try {
     const probe = await page();
     let failure;
     try { await probe.goto(retired, { timeout: 8000 }); } catch (error) { failure = String(error); }
-    assert(failure && /ERR_CONNECTION_|ERR_TIMED_OUT|Timeout/.test(failure), 'Old entrance must refuse or time out, not fail TLS verification');
+    assert(failure && /ERR_CONNECTION_|ERR_EMPTY_RESPONSE|ERR_TIMED_OUT|Timeout/.test(failure) && !failure.includes('ERR_CERT'),
+      'Old entrance must refuse or time out, not fail TLS verification');
     retiredEntrances.push({ address: new URL(retired).host, closed_after: closedAfter, time: new Date().toISOString(),
       outcome: /Timeout|TIMED_OUT/.test(failure) ? 'navigation_timeout' : 'connection_failure' });
     await probe.close();

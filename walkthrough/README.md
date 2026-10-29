@@ -7,13 +7,21 @@ Previously used free nodes may recur; the report records the actual distinct cou
 Passphrases are masked in screenshots. It never disables certificate checking.
 
 Run on the owned Linux test host using the existing browser acceptance image.
-Mount the private invitations and CA at `/inputs/invitations.json` and
-`/inputs/ca.pem`, this script as `/check/walkthrough.mjs`, and an empty evidence
+Mount the private invitations, CA and append-only core event log at
+`/inputs/invitations.json`, `/inputs/ca.pem` and `/inputs/events.jsonl`,
+this script as `/check/walkthrough.mjs`, and an empty evidence
 directory at `/evidence`. Use `walkthrough/run.sh` as the entrypoint. This first
 checks that the CA is rejected before adding it to a disposable browser trust store.
 Set `STARTED_AT` to the same Unix epoch as an accompanying cover-traffic run.
 An existing trace or result is refused so retries cannot mix evidence. Browser
-navigation failure is correlated with explicit core retirement events in the report.
+navigation failure must follow a matching explicit core retirement event.
+
+`bootstrap.mjs` additionally exercises the public welcome page: enrollment,
+relay sign-in, message storage and an operator reply. Supply `WELCOME_URL`,
+the CA and event mounts above, private core state at `/core-state` read-only,
+and fresh `/evidence`. Run it in a disposable browser profile that trusts the
+demo CA. It closes only the two entrances it created and verifies their actual
+retirement; clearing the page alone is not considered a successful close.
 
 Build a static report from the real evidence:
 
