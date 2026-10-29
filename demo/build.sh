@@ -20,18 +20,18 @@ docker run --rm --network "${BUILD_NETWORK:-bridge}" --cpus 2 --memory 3g \
   -v "$PWD:/app" -v "$DEBUGLET_SOURCE:/debuglet:ro" -w /app "$image" \
   sh -eu -c '
     export PATH=/usr/local/go/bin:$PATH
-    go build -o .local/mailbox .
+    go build -buildvcs=false -o .local/mailbox .
     cd relay
     cp go.mod ../.local/relay.mod
     cp go.sum ../.local/relay.sum
     go mod edit -modfile ../.local/relay.mod -replace github.com/netsec-ethz/debuglet=/debuglet
-    go build -mod=mod -modfile ../.local/relay.mod -o ../.local/node ./cmd/node
-    GOOS=wasip1 GOARCH=wasm go build -mod=mod -modfile ../.local/relay.mod -o ../.local/relay.wasm .
+    go build -buildvcs=false -mod=mod -modfile ../.local/relay.mod -o ../.local/node ./cmd/node
+    GOOS=wasip1 GOARCH=wasm go build -buildvcs=false -mod=mod -modfile ../.local/relay.mod -o ../.local/relay.wasm .
     if [ "$BUILD_DEBUGLET" = 1 ]; then
       cd /debuglet
       mkdir -p /app/.local/debuglet
-      go build -mod=readonly -o /app/.local/debuglet/debuglet-dispatcher ./cmd/dispatcher
-      go build -mod=readonly -o /app/.local/debuglet/debuglet-executor ./cmd/executor
+      go build -buildvcs=false -mod=readonly -o /app/.local/debuglet/debuglet-dispatcher ./cmd/dispatcher
+      go build -buildvcs=false -mod=readonly -o /app/.local/debuglet/debuglet-executor ./cmd/executor
     fi
   '
 echo 'Built core, controller and real Debuglet WASM relay.'
