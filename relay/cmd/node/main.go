@@ -39,7 +39,9 @@ type session struct {
 	reply
 	deadline    time.Time
 	listener    net.Listener
-	connections sync.Map
+	mu          sync.Mutex
+	closed      bool
+	connections map[net.Conn]struct{}
 }
 type node struct {
 	client          *client.Client
@@ -213,7 +215,7 @@ func (n *node) create(ctx context.Context, q request) (_ *session, result error)
 		alias("del", q.Address)
 		return nil, err
 	}
-	s := &session{request: q, reply: reply{URL: "https://" + net.JoinHostPort(q.Address, "8443"), RunID: runID}, deadline: deadline, listener: listener}
+	s := &session{request: q, reply: reply{URL: "https://" + net.JoinHostPort(q.Address, "8443"), RunID: runID}, deadline: deadline, listener: listener, connections: map[net.Conn]struct{}{}}
 	go s.forward(target)
 	return s, nil
 }
@@ -230,9 +232,17 @@ func (s *session) forward(target string) {
 			peer.Close()
 			continue
 		}
-		s.connections.Store(peer, struct{}{})
+		s.mu.Lock()
+		if s.closed {
+			s.mu.Unlock()
+			peer.Close()
+			<-capacity
+			return
+		}
+		s.connections[peer] = struct{}{}
+		s.mu.Unlock()
 		go func() {
-			defer func() { <-capacity; peer.Close(); s.connections.Delete(peer) }()
+			defer func() { <-capacity; peer.Close(); s.mu.Lock(); delete(s.connections, peer); s.mu.Unlock() }()
 			upstream, err := net.DialTimeout("tcp6", target, 2*time.Second)
 			if err != nil {
 				return
@@ -267,7 +277,12 @@ func (n *node) destroy(id string) error {
 		return nil
 	}
 	s.listener.Close()
-	s.connections.Range(func(key, value any) bool { key.(net.Conn).Close(); return true })
+	s.mu.Lock()
+	s.closed = true
+	for connection := range s.connections {
+		connection.Close()
+	}
+	s.mu.Unlock()
 	alias("del", s.Address)
 	if err := n.cancel(s.RunID); err != nil {
 		return err
