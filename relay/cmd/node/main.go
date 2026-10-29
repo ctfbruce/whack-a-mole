@@ -115,7 +115,10 @@ func (n *node) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if previous := n.sessions[q.ID]; previous != nil {
-		if previous.request != q || !time.Now().Before(previous.deadline) {
+		previous.mu.Lock()
+		closed := previous.closed
+		previous.mu.Unlock()
+		if closed || previous.request != q || !time.Now().Before(previous.deadline) {
 			http.Error(w, `{"error":"session conflict"}`, 409)
 			return
 		}
@@ -248,7 +251,7 @@ func (s *session) forward(target string) {
 				return
 			}
 			defer upstream.Close()
-			deadline := time.Now().Add(30 * time.Second)
+			deadline := time.Now().Add(40 * time.Second)
 			if s.deadline.Before(deadline) {
 				deadline = s.deadline
 			}

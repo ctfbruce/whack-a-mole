@@ -36,7 +36,7 @@ func main() {
 // This deliberately small prototype serves one connection at a time.
 func forward(a, b *debuglet.Socket) {
 	buf := make([]byte, 32<<10)
-	idle := time.Now().Add(15 * time.Second)
+	idle := time.Now().Add(35 * time.Second)
 	for time.Now().Before(idle) {
 		for _, pair := range [][2]*debuglet.Socket{{a, b}, {b, a}} {
 			src, dst := pair[0], pair[1]
@@ -52,7 +52,7 @@ func forward(a, b *debuglet.Socket) {
 				if writeErr != nil || written != n {
 					return
 				}
-				idle = time.Now().Add(15 * time.Second)
+				idle = time.Now().Add(35 * time.Second)
 			}
 			if err != nil && !errors.Is(err, debuglet.ErrTimeout) {
 				return

@@ -28,7 +28,7 @@ pids+=("$!")
 /app/.local/mailbox serve -state /app/.local/core -runtime http://127.0.0.1:9100 -runtime-token /app/.local/runtime.token -listen 127.0.0.1:9200 -ttl "${SESSION_TTL:-10m}" > /state/core.log 2>&1 &
 pids+=("$!")
 for i in $(seq 1 50); do
-  if curl --noproxy '*' -fsS http://127.0.0.1:9200/health >/dev/null; then echo 'Mailbox core and Debuglet runtime ready'; break; fi
+  if curl --noproxy '*' -fsS http://127.0.0.1:9200/health >/dev/null 2>&1; then echo 'Mailbox core and Debuglet runtime ready'; break; fi
   sleep 0.2
 done
 wait -n "${pids[@]}"
