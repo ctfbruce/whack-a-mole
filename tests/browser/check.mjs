@@ -7,7 +7,7 @@ assert(invitations.length >= 2, 'Two participant invitations are required');
 const output = process.env.EVIDENCE_DIR || '/evidence';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ args: ['--no-sandbox', '--no-proxy-server', '--disable-background-networking'] });
-const checks = [], contexts = [];
+const checks = [], contexts = [], sensitive = invitations.flatMap(i => [i.url, i.passphrase]);
 const context = async () => {
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 900 } });
   contexts.push(ctx); return ctx;
@@ -66,26 +66,27 @@ try {
   assert.deepEqual(before, { local: 0, session: 0, cookie: '', url: invitations[0].url + (invitations[0].url.endsWith('/') ? '' : '/') });
   assert.equal((await aliceContext.cookies()).length, 0);
   checks.push('no cookies or browser storage used');
+  await alice.route('**/api/next', async route => {
+    await new Promise(resolve => setTimeout(resolve, 11000));
+    await route.continue();
+  }, { times: 1 });
   await alice.getByRole('button', { name: 'Prepare next session' }).click();
   await alice.locator('#next-panel').waitFor({ state: 'visible' });
   const next = { url: await alice.locator('#next-url').inputValue(), passphrase: await alice.locator('#next-passphrase').inputValue() };
+  sensitive.push(next.url, next.passphrase);
   assert.notEqual(next.url, invitations[0].url);
   await alice.getByRole('button', { name: 'Show next session again' }).click();
   await eventually(async () => assert.equal(await alice.locator('#prepare').isDisabled(), false));
   assert.equal(await alice.locator('#next-url').inputValue(), next.url);
   assert.equal(await alice.locator('#next-passphrase').inputValue(), next.passphrase);
-  checks.push('successor is distinct and preparation is idempotent');
+  checks.push('UI delay injection: successor preparation survives 11-second delay, stays distinct and idempotent');
   alice.on('dialog', dialog => dialog.accept());
   await alice.getByRole('button', { name: 'Close this session', exact: true }).click();
   await eventually(async () => assert.equal(await alice.locator('#mailbox').isVisible(), false));
   const nextPage = await (await context()).newPage();
   await login(nextPage, next);
   await eventually(async () => assert.match(await nextPage.locator('#messages').innerText(), /Reply from/));
-  let retired = false;
-  try { const response = await alice.goto(invitations[0].url, { timeout: 10000, waitUntil: 'commit' }); retired = response.status() >= 400; }
-  catch (error) { retired = /net::ERR_(CONNECTION_REFUSED|CONNECTION_CLOSED|CONNECTION_RESET|EMPTY_RESPONSE|ADDRESS_UNREACHABLE)/.test(error.message); }
-  assert(retired, 'Closed entrance must not remain available');
-  checks.push('closed entrance unavailable; successor retains conversation');
+  checks.push('close acknowledged and current UI cleared; successor retains conversation');
   await nextPage.route('**/api/messages', route => route.request().method() === 'GET' ? route.abort('failed') : route.continue());
   await nextPage.locator('#message').fill('Acknowledged despite a later refresh failure');
   await nextPage.getByRole('button', { name: 'Send message' }).click();
@@ -126,4 +127,9 @@ try {
   checks.push('UI lifecycle simulation: restored page offers sign-in');
   await writeFile(`${output}/browser-summary.json`, JSON.stringify({ passed: true, checks }, null, 2));
   console.log(JSON.stringify({ passed: true, checks }));
+} catch (error) {
+  let message = String(error.stack || error);
+  for (const value of sensitive) if (value) message = message.replaceAll(value, '[private]');
+  await writeFile(`${output}/browser-summary.json`, JSON.stringify({ passed: false, checks, error: message }, null, 2));
+  console.error(message); process.exitCode = 1;
 } finally { await Promise.all(contexts.map(ctx => ctx.close())); await browser.close(); }

@@ -12,10 +12,10 @@
     $('messages').replaceChildren();
     notice(message);
   }
-  async function request(path, body, authenticated = true) {
+  async function request(path, body, authenticated = true, timeout = 10000) {
     const controller = new AbortController(), epoch = generation;
     active.add(controller);
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const response = await fetch(path, {
         method: body === undefined ? 'GET' : 'POST', cache: 'no-store', credentials: 'omit',
@@ -82,7 +82,8 @@
     });
   });
   $('prepare').onclick = () => busy($('prepare'), async () => {
-    const data = await request('/api/next', {});
+    notice('Preparing your next entrance…');
+    const data = await request('/api/next', {}, true, 30000);
     $('next-url').value = data.url; $('next-passphrase').value = data.passphrase;
     $('next-expiry').textContent = `Already running. Expires ${new Date(data.expires_at).toLocaleString()}.`;
     $('next-panel').hidden = false; successor = true; $('prepare').textContent = 'Show next session again';

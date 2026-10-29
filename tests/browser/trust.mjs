@@ -8,4 +8,6 @@ try {
   const page = await browser.newPage();
   await assert.rejects(page.goto(invitations[0].url, { timeout: 10000 }), /ERR_CERT_AUTHORITY_INVALID/);
   console.log(JSON.stringify({ passed: true, check: 'browser rejects lab TLS before CA is trusted' }));
+} catch (error) {
+  console.error(String(error).replaceAll(invitations[0].url, '[private]')); process.exitCode = 1;
 } finally { await browser.close(); }
