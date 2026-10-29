@@ -6,7 +6,7 @@
   $('create').onclick = async () => {
     $('create').disabled = true; notice('Preparing your entrance…');
     const controller = new AbortController(); pending = controller;
-    const timeout = setTimeout(() => controller.abort(), 45000);
+    const timeout = setTimeout(() => controller.abort(), 75000);
     try {
       const response = await fetch('/api/enroll', { method: 'POST', credentials: 'omit', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: controller.signal });
       if (!response.ok) throw new Error(`An entrance could not be prepared (${response.status}).`);
