@@ -91,7 +91,12 @@ try {
     await writeFile(sessionFile, JSON.stringify({ url: current.url, token: firstSession.token,
       expires_at: firstSession.expires_at, started_at: started }), { mode: 0o600, flag: 'wx' });
     sessionOwned = true;
-    await new Promise(resolve => setTimeout(resolve, hold * 1000));
+    const holdStarted = Date.now();
+    await new Promise(resolve => setTimeout(resolve, Math.min(8, hold / 2) * 1000));
+    await send(source, 'Demo during background traffic: the mailbox remains usable.');
+    await reporter.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await until(async () => assert.match(await reporter.locator('#messages').innerText(), /Demo during background traffic/));
+    await new Promise(resolve => setTimeout(resolve, Math.max(0, hold * 1000 - (Date.now() - holdStarted))));
     await unlink(sessionFile); sessionOwned = false;
   }
   for (let index = 0; index < hops; index++) {
