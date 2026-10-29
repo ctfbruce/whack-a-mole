@@ -2,5 +2,5 @@ FROM mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b201
 RUN apt-get update && apt-get install -y --no-install-recommends libnss3-tools && rm -rf /var/lib/apt/lists/*
 WORKDIR /check
 RUN npm install --no-audit --no-fund --ignore-scripts playwright@1.64.1
-COPY tests/browser/check.mjs tests/browser/trust.mjs tests/browser/run.sh ./
+COPY check.mjs trust.mjs run.sh ./
 ENTRYPOINT ["/check/run.sh"]

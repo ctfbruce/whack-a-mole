@@ -11,7 +11,7 @@ client=ephemeral-mailbox-browser
 evidence="$PWD/.local/browser-evidence"
 mkdir -p "$evidence"
 echo 'Preparing the cached browser image…'
-docker build -t ephemeral-mailbox-browser:local -f tests/browser/Dockerfile . >"$evidence/build.log" 2>&1
+docker build -t ephemeral-mailbox-browser:local tests/browser >"$evidence/build.log" 2>&1
 echo 'Creating two private test invitations…'
 docker exec "$lab" /app/.local/mailbox create -state /app/.local/core \
   -names 'Browser source,Browser reporter' -out /app/.local/browser-invitations.json >/dev/null
