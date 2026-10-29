@@ -61,7 +61,6 @@ type Core struct {
 	hops     map[string]*Hop
 	closing  bool
 	fleet    []Entrance
-	cursor   int
 	events   io.Writer
 	eventsMu sync.Mutex
 }

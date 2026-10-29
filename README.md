@@ -81,8 +81,10 @@ an SSH tunnel, terminating only at the core. The test browser must trust the pri
 CA; do not bypass verification.
 
 This emulates address changes using a fixed public IPv4 fleet, not public IPv6 or
-a fresh VM per session. Occupied slots are excluded from allocation; failed cleanup
-keeps a slot reserved. Pods remain billable until provider deletion is confirmed.
+a fresh VM per session. Each entrance chooses randomly among currently free nodes;
+occupied slots are excluded, and failed cleanup keeps a slot reserved. Previously
+used nodes become eligible once cleanup succeeds. Pods remain billable until
+provider deletion is confirmed.
 
 Authenticated `/api/cover` requests support bounded synthetic traffic profiles;
 they do not store messages or demonstrate indistinguishability. Optional `-events`

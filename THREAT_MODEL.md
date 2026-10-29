@@ -52,7 +52,7 @@ the two correspondents**. The core reads and stores their messages.
 - After login, a bearer token authorizes that entry's requests. Possessing an
   invitation or token grants its access; these are credentials, not identity proof.
 - Messages are retained across entry changes. A successor uses a random local IPv6
-  address or an available fleet IP, plus a new passphrase. Repeated requests on one
+  address or a randomly selected free fleet IP, plus a new passphrase. Repeated requests on one
   entry return the same successor, whose lifetime starts when it is prepared.
 - Closing or expiring an entry retires its listener and existing connections.
   Runtime expiry bounds its life even if normal cleanup fails. A fleet slot stays

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"net"
 	"net/http"
 	"net/netip"
@@ -99,8 +100,8 @@ func (f *fleetRuntime) Stop(ctx context.Context, id string) error {
 	return nil
 }
 
-// Called under the core lock. A slot remains reserved until its old entrance's
-// cleanup finishes. Round-robin selection visits every pod before reusing one.
+// Called under the core lock. Only confirmed free nodes enter the random draw.
+// Previously used nodes become eligible again after successful cleanup.
 func (c *Core) entrance() (Entrance, error) {
 	if len(c.fleet) == 0 {
 		bits := c.prefix.Addr().As16()
@@ -110,10 +111,8 @@ func (c *Core) entrance() (Entrance, error) {
 		ip := netip.AddrFrom16(bits)
 		return Entrance{Name: "local IPv6", URL: "https://" + net.JoinHostPort(ip.String(), "8443"), Backend: "[::1]:0", ip: ip}, nil
 	}
-	for attempt := 0; attempt < len(c.fleet); attempt++ {
-		i := c.cursor % len(c.fleet)
-		c.cursor++
-		n := c.fleet[i]
+	free := make([]Entrance, 0, len(c.fleet))
+	for _, n := range c.fleet {
 		used := false
 		for _, h := range c.hops {
 			if h.Invitation.URL == n.URL {
@@ -122,8 +121,15 @@ func (c *Core) entrance() (Entrance, error) {
 			}
 		}
 		if !used {
-			return n, nil
+			free = append(free, n)
 		}
 	}
-	return Entrance{}, errors.New("all relay pods are occupied")
+	if len(free) == 0 {
+		return Entrance{}, errors.New("all relay pods are occupied")
+	}
+	index, err := rand.Int(rand.Reader, big.NewInt(int64(len(free))))
+	if err != nil {
+		return Entrance{}, err
+	}
+	return free[index.Int64()], nil
 }
