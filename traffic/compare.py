@@ -60,6 +60,8 @@ def main():
     content = '<!doctype html><meta charset="utf-8"><title>Mailbox traffic rehearsal</title><style>body{font:17px system-ui;color:#172b40;max-width:1000px;margin:45px auto;padding:0 24px}p{line-height:1.6;color:#4e6376}svg{width:100%;font-size:12px}h2{margin-top:36px}.tx{color:#2463ac}.rx{color:#d47b22}</style><h1>What the generated traffic changes</h1><p><span class="tx">Blue: offered request bodies</span> · <span class="rx">Orange: received response bodies</span>. Both charts share their axes.</p>'
     content += chart("Recorded mailbox traffic", baseline, duration, ceiling)
     content += chart("The same mailbox traffic plus recorded background exchanges", combined, duration, ceiling)
+    failures = sum(row["direction"] == "tx" and row.get("outcome") != "ok" for row in cover)
+    content += f'<p>Background exchanges with a failure, cancellation or deadline: <strong>{failures}</strong>. See the original trace for individual outcomes.</p>'
     content += '<p>These are components of the recorded rehearsal, not independent trials. Counts exclude TLS, TCP/IP headers and retransmissions. Failed transfers may undercount partial received bodies. This picture does not establish resemblance to ordinary browsing, anonymity or resistance to traffic analysis.</p>'
     with args.out.open("x") as output:
         output.write(content)
