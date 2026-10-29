@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Welcome · Private mailbox</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/welcome.js" defer></script>
+</head>
+<body>
+<main>
+  <header><span class="eyebrow">RESEARCH PROTOTYPE</span><h1>Welcome</h1><p>Your conversation starts with a temporary private entrance.</p></header>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <section id="welcome" aria-labelledby="create-title">
+    <h2 id="create-title">Create your entrance</h2>
+    <p>We’ll prepare a private address and a passphrase. Open that address to reach your mailbox.</p>
+    <button id="create">Create my entrance</button>
+  </section>
+  <section id="invitation" hidden aria-labelledby="invitation-title">
+    <h2 id="invitation-title">Your private entrance</h2>
+    <p id="expiry"></p>
+    <label for="address">Address</label><div class="copy-row"><input id="address" readonly><button id="copy-address" class="secondary">Copy address</button></div>
+    <label for="passphrase">Passphrase</label><div class="copy-row"><input id="passphrase" readonly autocomplete="off" spellcheck="false"><button id="copy-passphrase" class="secondary">Copy passphrase</button></div>
+    <p>Copy your passphrase, then <a id="open" target="_blank" rel="noopener noreferrer">open your entrance</a> and sign in.</p>
+    <p class="muted">Save both securely. They are kept only on this page; copying uses your device’s clipboard. Before your session ends, prepare your next entrance from inside the mailbox.</p>
+  </section>
+  <section aria-labelledby="certificate-title">
+    <h2 id="certificate-title">Demo certificate</h2>
+    <p>The temporary entrance uses our demo certificate authority. Your test browser must trust it before opening the entrance: <a href="/ca.pem" download>download the demo CA certificate</a>. Only install it in a dedicated test browser you control.</p>
+  </section>
+  <footer>This prototype trusts the core operator with plaintext messages. It does not hide that you visited this site or erase browser, device or network records.</footer>
+</main>
+</body>
+</html>
