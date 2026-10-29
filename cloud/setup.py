@@ -15,6 +15,8 @@ import shlex
 import subprocess
 import time
 import uuid
+import urllib.error
+import urllib.request
 
 
 def save(path, value):
@@ -146,7 +148,20 @@ redirect_stderr=true
                'if test -f state/supervisor.pid && kill -0 "$(cat state/supervisor.pid)" 2>/dev/null; then exit 20; fi; '
                'supervisord -c /workspace/mailbox/supervisor.conf')
     run(options + [target, command], input=('\n'.join(hashes) + '\n').encode())
-    print(node['name'] + ' installed; verifying the real guest is a separate step', flush=True)
+    request = urllib.request.Request(node['runtime_url'] + '/sessions', headers={
+        'Authorization': 'Bearer ' + Path(node['token_file']).read_text().strip()})
+    for _ in range(40):
+        try:
+            urllib.request.urlopen(request, timeout=2).close()
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                break  # Authenticated controller is listening; no guest started.
+            raise RuntimeError('Controller readiness returned an unexpected status') from None
+        except OSError:
+            time.sleep(0.5)
+    else:
+        raise RuntimeError('Controller did not become ready; inspect private pod logs')
+    print(node['name'] + ' controller ready; real guest validation is separate', flush=True)
     return node
 
 

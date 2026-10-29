@@ -29,7 +29,7 @@ Provision exactly ten CPU pods using your cloud tooling. Arm automatic provider
 deletion **before** creating the fleet. The state passed to `setup.py` must have:
 
 - `inventory.json` with a fixed `expires_at`, `terminate: false`, and ten `pods`;
-- each pod's `id`, `role` (`executor-1` … `executor-10`), `public_ip`, `ssh_port`
+- each pod's `id`, `role` (`relay-1` … `relay-10`), `public_ip`, `ssh_port`
   and `public_port` (the provider's TCP mapping of container port 8443);
 - a private `ssh_key` and `known_hosts` entries pinned by pod ID, verified
   through the provider's authenticated control plane.
