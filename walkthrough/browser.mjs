@@ -15,6 +15,7 @@ const browser = await chromium.launch({ args: ['--no-sandbox', '--no-proxy-serve
 const contexts = [], steps = [], retiredEntrances = [], credentials = invitations.map(i => i.passphrase), hosts = new Set();
 const pendingResponses = new Set();
 let trace = Promise.resolve(), requestID = 0, sessionOwned = false;
+let source, current;
 const requests = new WeakMap();
 function record(row) {
   trace = trace.then(() => appendFile(`${output}/message-trace.jsonl`, JSON.stringify({ profile: 'mailbox', kind: 'message', ...row }) + '\n'));
@@ -75,7 +76,7 @@ async function send(view, text) {
   await until(async () => assert.match(await view.locator('#notice').innerText(), /stored by the core/));
 }
 try {
-  let source = await page(), current = invitations[0];
+  source = await page(); current = invitations[0];
   const reporter = await page();
   await source.goto(current.url); await snapshot(source, '1 · Open the supplied address', current.url);
   const firstSession = await login(source, current); await login(reporter, invitations[1]);
@@ -134,7 +135,14 @@ try {
 } catch (error) {
   let message = String(error.stack || error);
   for (const credential of credentials) if (credential) message = message.replaceAll(credential, '[redacted]');
-  await writeFile(`${output}/walkthrough.json`, JSON.stringify({ passed: false, error: message, steps }, null, 2));
+  let notice = '';
+  if (source && !source.isClosed()) {
+    notice = await source.locator('#notice').innerText().catch(() => '');
+    await snapshot(source, 'Stopped · The next entrance could not be prepared', current.url).catch(() => {});
+  }
+  for (const credential of credentials) if (credential) notice = notice.replaceAll(credential, '[redacted]');
+  await writeFile(`${output}/walkthrough.json`, JSON.stringify({ passed: false, started_at: started,
+    error: message, notice, distinct_addresses: hosts.size, steps, retired_entrances: retiredEntrances }, null, 2));
   console.error(message); process.exitCode = 1;
 } finally {
   if (sessionOwned) await unlink(sessionFile).catch(() => {});
