@@ -40,11 +40,11 @@ def supervise(command, expires_at, pid_file, health_url, startup_grace):
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     delay = 1.0
+    grace_until, was_ready = time.monotonic() + startup_grace, False
     while not stopping and time.time() < expires_at:
         child = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                  preexec_fn=die_with_parent)
         next_check, failures = time.monotonic() + 5, 0
-        grace_until, was_ready = time.monotonic() + startup_grace, False
         temporary = pid_file.with_suffix('.tmp')
         try:
             temporary.write_text(str(child.pid) + '\n')
