@@ -1,8 +1,9 @@
 # Private fleet walkthrough
 
 `browser.mjs` uses the real mailbox UI, two private invitations and eight next
-entrances. It requires each next entrance to have an unused host IP, verifies TLS,
+entrances. It requires each next entrance to differ from both live entrances, verifies TLS,
 checks message continuity and confirms each retired entrance stops responding.
+Previously used free nodes may recur; the report records the actual distinct count.
 Passphrases are masked in screenshots. It never disables certificate checking.
 
 Run on the owned Linux test host using the existing browser acceptance image.

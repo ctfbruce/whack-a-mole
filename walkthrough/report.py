@@ -76,11 +76,12 @@ if a.mailboxes:
 if a.traffic:
     shutil.copyfile(a.traffic, a.output.parent / 'traffic.html')
     traffic = '<p><a href="traffic.html">Open the recorded traffic comparison →</a></p><iframe src="traffic.html" title="Observed application traffic comparison"></iframe>'
-closed = {row.get('address') for row in events if row.get('event') == 'entry_closed'
-          and row.get('detail') == 'explicit'
-          and datetime.fromisoformat(row['time'].replace('Z', '+00:00')).timestamp() >= run.get('started_at', 0)}
+closed = [row for row in events if row.get('event') == 'entry_closed' and row.get('detail') == 'explicit']
 retired = run.get('retired_entrances', [])
-retirement_matches = len(retired) == run.get('handoffs') and all(row['address'] in closed for row in retired)
+stamp = lambda value: datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
+retirement_matches = len(retired) == run.get('handoffs') and all(any(
+    event.get('address') == row['address'] and stamp(row.get('closed_after', row['time'])) <= stamp(event['time']) <= stamp(row['time'])
+    for event in closed) for row in retired)
 status = 'Verified rehearsal' if run.get('passed') and retirement_matches else 'Incomplete rehearsal'
 status_class = 'status' if status == 'Verified rehearsal' else 'status incomplete'
 failure = '' if run.get('passed') else '<p class="limits">Stopped before the complete tour: ' + e(run.get('notice') or run.get('error', 'Evidence incomplete').splitlines()[0]) + '</p>'

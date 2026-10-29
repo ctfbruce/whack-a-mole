@@ -105,9 +105,12 @@ try {
     await source.locator('#next-panel').waitFor({ state: 'visible' });
     const next = { url: await source.locator('#next-url').inputValue(), passphrase: await source.locator('#next-passphrase').inputValue() };
     credentials.push(next.passphrase);
-    assert(!hosts.has(new URL(next.url).hostname), 'Every demonstrated successor must use a previously unused pod address');
+    const nextHost = new URL(next.url).hostname;
+    assert(nextHost !== new URL(current.url).hostname && nextHost !== new URL(invitations[1].url).hostname,
+      'Successor must differ from both live entrances; retired free nodes may be reused');
     if (index === 0) await snapshot(source, '3 · Save the next entrance (passphrase hidden here)', current.url);
     source.once('dialog', dialog => dialog.accept());
+    const closedAfter = new Date().toISOString();
     await source.getByRole('button', { name: 'Close this session', exact: true }).click();
     await until(async () => assert.equal(await source.locator('#mailbox').isVisible(), false));
     const retired = current.url;
@@ -119,7 +122,7 @@ try {
     let failure;
     try { await probe.goto(retired, { timeout: 8000 }); } catch (error) { failure = String(error); }
     assert(failure && /ERR_CONNECTION_|ERR_TIMED_OUT|Timeout/.test(failure), 'Old entrance must refuse or time out, not fail TLS verification');
-    retiredEntrances.push({ address: new URL(retired).host, time: new Date().toISOString(),
+    retiredEntrances.push({ address: new URL(retired).host, closed_after: closedAfter, time: new Date().toISOString(),
       outcome: /Timeout|TIMED_OUT/.test(failure) ? 'navigation_timeout' : 'connection_failure' });
     await probe.close();
   }
@@ -127,7 +130,7 @@ try {
   await until(async () => assert.match(await reporter.locator('#messages').innerText(), new RegExp(`continuity check ${hops}:`)));
   await snapshot(reporter, 'Reporter · Messages received across every handoff', invitations[1].url);
   const result = { passed: true, started_at: started, distinct_addresses: hosts.size, handoffs: hops, steps, retired_entrances: retiredEntrances,
-    checks: ['Verified browser TLS', 'Two-person exchange', 'Distinct pod on each handoff', 'History retained', 'Old entrance navigation fails after close; core retirement checked separately'],
+    checks: ['Verified browser TLS', 'Two-person exchange', 'Successor differs from both live entrances; free nodes may be reused', 'History retained', 'Old entrance navigation fails at check time; core retirement checked separately'],
     limitation: 'Application body byte counts, not encrypted wire bytes. This does not establish traffic indistinguishability.' };
   await Promise.all(pendingResponses); await trace;
   await writeFile(`${output}/walkthrough.json`, JSON.stringify(result, null, 2));
