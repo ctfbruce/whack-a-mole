@@ -16,7 +16,7 @@ def read(path):
         raise ValueError("too many trace records")
     for row in rows:
         if (row["direction"] not in ("tx", "rx") or type(row["app_bytes"]) is not int
-                or not 0 <= row["app_bytes"] <= 262145
+                or not 0 <= row["app_bytes"] <= 8 * 1024 * 1024
                 or not math.isfinite(row["elapsed_s"]) or not 0 <= row["elapsed_s"] <= 7200):
             raise ValueError("invalid trace record")
     return rows
