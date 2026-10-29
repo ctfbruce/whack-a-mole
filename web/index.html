@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Private mailbox</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<main>
+  <header><span class="eyebrow">RESEARCH PROTOTYPE</span><h1>Private mailbox</h1><p>A temporary entrance to your conversation.</p></header>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <section id="login-panel" aria-labelledby="login-title">
+    <h2 id="login-title">Open your conversation</h2>
+    <form id="login-form" autocomplete="off">
+      <label for="passphrase">Session passphrase</label>
+      <input id="passphrase" type="password" required autocomplete="off" spellcheck="false" autocapitalize="none">
+      <button type="submit">Open mailbox</button>
+    </form>
+  </section>
+  <div id="mailbox" hidden>
+    <section aria-labelledby="conversation-title">
+      <div class="heading"><h2 id="conversation-title">Conversation</h2><button id="refresh" class="secondary">Refresh</button></div>
+      <p class="muted">Signed in as <strong id="identity"></strong> · <span id="remaining"></span></p>
+      <ol id="messages" aria-label="Messages"></ol><p id="empty" class="muted">No messages yet.</p>
+      <form id="message-form">
+        <label for="message">Your message</label>
+        <textarea id="message" rows="4" maxlength="4096" required placeholder="Write a message…"></textarea>
+        <div class="heading"><small>Up to 4 KiB. Refresh to check for replies.</small><button type="submit">Send message</button></div>
+      </form>
+    </section>
+    <section aria-labelledby="next-title">
+      <h2 id="next-title">Your next visit</h2>
+      <p>Prepare a new entrance before closing this one. It starts immediately and has its own expiry.</p>
+      <button id="prepare" class="secondary">Prepare next session</button>
+    </section>
+  </div>
+  <section id="next-panel" hidden aria-labelledby="next-ready-title">
+    <h2 id="next-ready-title">Keep your next entrance</h2>
+    <p id="next-expiry"></p>
+    <label for="next-url">Next address</label><div class="copy-row"><input id="next-url" readonly><button id="copy-url" class="secondary">Copy address</button></div>
+    <label for="next-passphrase">Next passphrase</label><div class="copy-row"><input id="next-passphrase" readonly autocomplete="off" spellcheck="false"><button id="copy-passphrase" class="secondary">Copy passphrase</button></div>
+    <p class="muted">Save both securely. They are not saved by this page. Copying uses your device’s clipboard.</p>
+  </section>
+  <div id="session-actions" class="actions" hidden><button id="close" class="secondary danger">Close this session</button></div>
+  <button id="clear" class="text-button" hidden>Clear this page</button>
+  <footer>Closing a session retires its address. It does not erase browser, device or network records. The core operator is trusted with your messages.</footer>
+</main>
+</body>
+</html>

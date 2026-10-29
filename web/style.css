@@ -1,0 +1,37 @@
+:root { font: 16px/1.5 system-ui, sans-serif; color: #20332e; background: #f4f6f3; color-scheme: light; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+main { width: min(100% - 2rem, 43rem); margin: 3rem auto; }
+header { margin-bottom: 2rem; }
+h1 { font-size: 2.3rem; line-height: 1.2; margin: .4rem 0; letter-spacing: -.04em; }
+h2 { font-size: 1.15rem; margin: 0 0 .6rem; }
+p { margin: .6rem 0 1rem; }
+.eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .15em; color: #60756c; }
+section { background: #fff; border: 1px solid #dce3dd; border-radius: 1rem; padding: 1.5rem; margin-bottom: 1rem; }
+.heading, .copy-row, .actions { display: flex; align-items: center; justify-content: space-between; gap: .8rem; }
+.heading h2 { margin: 0; }
+label { display: block; font-weight: 600; font-size: .9rem; margin: 1rem 0 .4rem; }
+input, textarea { width: 100%; min-width: 0; font: inherit; padding: .7rem .8rem; color: inherit; border: 1px solid #aebdb4; background: #fff; border-radius: .45rem; }
+textarea { resize: vertical; }
+button { border: 1px solid transparent; border-radius: .45rem; padding: .7rem 1rem; font: inherit; font-weight: 600; background: #215c48; color: white; cursor: pointer; }
+button:disabled { cursor: wait; opacity: .6; }
+button.secondary { background: #f8faf7; color: #264d3f; border-color: #cbd6ce; }
+button.danger { color: #8e3c2b; }
+button.text-button { background: transparent; color: #4d655a; padding: .7rem 0; text-decoration: underline; }
+input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid #71a88c; outline-offset: 2px; }
+#login-form button { width: 100%; margin-top: 1rem; }
+.copy-row button { white-space: nowrap; }
+.muted, small, footer { color: #61736a; }
+small, footer { font-size: .8rem; }
+footer { margin-top: 2rem; }
+#notice { color: #304e41; white-space: pre-wrap; }
+#notice:empty { display: none; }
+#notice.error { color: #a13c2c; }
+#messages { padding: 0; list-style: none; max-height: 26rem; overflow: auto; margin: 1.5rem 0; }
+#messages li { padding: 1rem; margin-bottom: .6rem; border-radius: .6rem; background: #f0f5ef; }
+#messages li.mine { background: #e7f0eb; }
+#messages p { white-space: pre-wrap; overflow-wrap: anywhere; margin: .4rem 0 0; }
+#messages time { display: block; font-size: .75rem; color: #60756c; }
+#message-form .heading { margin-top: .6rem; }
+@media (max-width: 480px) { main { margin: 1.5rem auto; } section { padding: 1rem; } .copy-row { flex-wrap: wrap; } .copy-row button { width: 100%; } }
