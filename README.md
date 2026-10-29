@@ -166,6 +166,7 @@ For focused development checks on Linux with Go 1.26.10, Python 3 and OpenSSL:
 go test -race ./...
 (cd relay && go test -race ./cmd/node)
 python3 -m unittest discover -s traffic -p 'test_*.py'
+python3 -m unittest discover -s cloud -p 'test_*.py'
 ```
 
 Keep keys, invitations, mailbox state and rehearsal output under the ignored
