@@ -15,6 +15,7 @@ p.add_argument('--events', required=True, type=Path)
 p.add_argument('--browser', required=True, type=Path)
 p.add_argument('--traffic', type=Path, help='Optional recorded-traffic comparison HTML')
 p.add_argument('--mailboxes', type=Path, help='Optional PRIVATE core state; includes plaintext demo messages')
+p.add_argument('--bootstrap', type=Path, help='Optional separate first-visit browser evidence directory')
 p.add_argument('--output', required=True, type=Path)
 a = p.parse_args()
 e = lambda value: html.escape(str(value), quote=True)
@@ -65,6 +66,18 @@ for index, step in enumerate(run.get('steps', [])):
     buttons += f'<button class="step {"selected" if not index else ""}" data-step="{index}">{e(step["title"])}</button>'
     screenshots += f'<figure data-image="{index}" {"hidden" if index else ""}><figcaption><strong>{e(step["title"])}</strong><code>{e(step["address"])}</code></figcaption><img src="assets/{e(source.name)}" alt="{e(step["title"])}"></figure>'
 traffic = '<p>No traffic comparison was supplied for this snapshot.</p>'
+bootstrap = ''
+if a.bootstrap:
+    first = json.loads((a.bootstrap / 'bootstrap.json').read_text())
+    first_checks = ''.join(f'<li>{e(check)}</li>' for check in first.get('checks', []))
+    pictures = ''
+    for filename, caption in [('welcome.png', 'Public welcome page'), ('visitor-conversation.png', 'Visitor receives the operator reply')]:
+        source = a.bootstrap / filename
+        if source.exists():
+            target = 'bootstrap-' + filename
+            shutil.copyfile(source, assets / target)
+            pictures += f'<figure><figcaption>{e(caption)}</figcaption><img src="assets/{target}" alt="{e(caption)}"></figure>'
+    bootstrap = '<section><h2>First visit: ' + ('verified' if first.get('passed') else 'incomplete') + '</h2><p>This separate browser check covers enrollment, a real message and reply, and retirement of its two test entrances.</p><ul>' + first_checks + '</ul><div class="walkthrough">' + pictures + '</div></section>'
 mailboxes = ''
 if a.mailboxes:
     rooms = json.loads(a.mailboxes.read_text())
@@ -85,6 +98,10 @@ retirement_matches = len(retired) == run.get('handoffs') and all(any(
 status = 'Verified rehearsal' if run.get('passed') and retirement_matches else 'Incomplete rehearsal'
 status_class = 'status' if status == 'Verified rehearsal' else 'status incomplete'
 failure = '' if run.get('passed') else '<p class="limits">Stopped before the complete tour: ' + e(run.get('notice') or run.get('error', 'Evidence incomplete').splitlines()[0]) + '</p>'
+failed_nodes = sorted({row.get('node', 'Unknown node') for row in events if row.get('detail') == 'provision_failure'
+                      and begin <= stamp(row['time']) <= end})
+if failed_nodes:
+    failure += '<p class="limits">Core evidence records a relay provisioning failure on ' + e(', '.join(failed_nodes)) + '. The tour did not skip this node or count an unsuccessful handoff.</p>'
 checks = ''.join(f'<li>{e(check)}</li>' for check in run.get('checks', []))
 checks += '<li>' + ('Every predecessor also has a matching explicit core retirement event.' if retirement_matches
                     else 'Core retirement evidence is incomplete for this browser run.') + '</li>'
@@ -103,6 +120,7 @@ section{{background:white;border:1px solid #dce5eb;border-radius:18px;padding:28
 </style><main><header class="hero"><span class="eyebrow">Ephemeral mailbox · Private evidence</span><h1>One conversation.<br>Different entrances.</h1><p>A real browser follows temporary addresses across an owned fleet. Messages stay at the trusted core while individual Debuglet relays come and go.</p><span class="{status_class}">{e(status)}</span></header>
 {failure}<div class="stats"><div class="stat"><strong>{visited}</strong><span>distinct addresses signed into</span></div><div class="stat"><strong>{handoffs}</strong><span>successful handoffs captured</span></div><div class="stat"><strong>{counts['message_stored']}</strong><span>recorded message writes</span></div></div>
 <section><h2>The deployment</h2><div class="flow"><div><b>Trusted core</b>Identity, messages, TLS</div><em>↔</em><div><b>Ephemeral relay</b>Opaque bytes in WASM</div><em>↔</em><div><b>Browser</b>Address + passphrase</div></div><div class="nodes">{nodes}</div><p>These are the fleet's recorded public addresses. Separate IPv4 pod addresses stand in for distinct IPv6 entrances; this is not a public IPv6 test. Counts describe this captured rehearsal, not current availability.</p></section>
+{bootstrap}
 <section><h2>The user's view</h2><p>The same conversation follows the user. Successor credentials are deliberately masked in these screenshots.</p><div class="walkthrough"><nav class="steps">{buttons}</nav><div>{screenshots}</div></div></section>
 <section><h2>The core's view</h2><p>Actual lifecycle and storage events. No passphrases, session tokens or message contents appear in this event view.</p><div class="scroll"><table><thead><tr><th>UTC time</th><th>Event</th><th>Node</th><th>Entrance</th><th>Participant</th><th>Detail</th></tr></thead><tbody>{timeline}</tbody></table></div></section>
 {mailboxes}
