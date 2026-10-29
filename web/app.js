@@ -87,6 +87,7 @@
     $('next-url').value = data.url; $('next-passphrase').value = data.passphrase;
     $('next-expiry').textContent = `Already running. Expires ${new Date(data.expires_at).toLocaleString()}.`;
     $('next-panel').hidden = false; successor = true; $('prepare').textContent = 'Show next session again';
+    notice('Next entrance ready. Save its address and passphrase before closing this one.');
   });
   for (const field of ['url', 'passphrase']) $('copy-' + field).onclick = async () => {
     const input = $('next-' + field);
