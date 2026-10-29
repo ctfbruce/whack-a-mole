@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 # Run in the disposable acceptance browser image. This never bypasses TLS checks.
 export HOME=/tmp/mailbox-walkthrough-home
 mkdir -p "$HOME/.pki/nssdb"

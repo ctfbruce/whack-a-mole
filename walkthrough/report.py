@@ -59,8 +59,15 @@ traffic = '<p>No traffic comparison was supplied for this snapshot.</p>'
 if a.traffic:
     shutil.copyfile(a.traffic, a.output.parent / 'traffic.html')
     traffic = '<p><a href="traffic.html">Open the recorded traffic comparison →</a></p><iframe src="traffic.html" title="Observed application traffic comparison"></iframe>'
-status = 'Verified rehearsal' if run.get('passed') else 'Incomplete rehearsal'
+closed = {row.get('address') for row in events if row.get('event') == 'entry_closed'
+          and row.get('detail') == 'explicit'
+          and datetime.fromisoformat(row['time'].replace('Z', '+00:00')).timestamp() >= run.get('started_at', 0)}
+retired = run.get('retired_entrances', [])
+retirement_matches = len(retired) == run.get('handoffs') and all(row['address'] in closed for row in retired)
+status = 'Verified rehearsal' if run.get('passed') and retirement_matches else 'Incomplete rehearsal'
 checks = ''.join(f'<li>{e(check)}</li>' for check in run.get('checks', []))
+checks += '<li>' + ('Every predecessor also has a matching explicit core retirement event.' if retirement_matches
+                    else 'Core retirement evidence is incomplete for this browser run.') + '</li>'
 document = f'''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ephemeral mailbox · Rehearsal</title><style>
 :root{{color-scheme:light;font:16px/1.5 system-ui,sans-serif;color:#182b3b;background:#eef3f6}}

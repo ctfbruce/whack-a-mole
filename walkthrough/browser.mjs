@@ -9,10 +9,12 @@ const hold = Number(process.env.COVER_HOLD_SECONDS || 0), sessionFile = process.
 assert(invitations.length === 2 && Number.isInteger(hops) && hops >= 1 && hops <= 12);
 assert(Number.isFinite(hold) && hold >= 0 && hold <= 60 && (!hold || sessionFile));
 await mkdir(output, { recursive: true });
+await writeFile(`${output}/message-trace.jsonl`, '', { mode: 0o600, flag: 'wx' });
+await writeFile(`${output}/walkthrough.json`, '', { mode: 0o600, flag: 'wx' });
 const browser = await chromium.launch({ args: ['--no-sandbox', '--no-proxy-server', '--disable-background-networking'] });
-const contexts = [], steps = [], credentials = invitations.map(i => i.passphrase), hosts = new Set();
+const contexts = [], steps = [], retiredEntrances = [], credentials = invitations.map(i => i.passphrase), hosts = new Set();
 const pendingResponses = new Set();
-let trace = Promise.resolve(), requestID = 0;
+let trace = Promise.resolve(), requestID = 0, sessionOwned = false;
 const requests = new WeakMap();
 function record(row) {
   trace = trace.then(() => appendFile(`${output}/message-trace.jsonl`, JSON.stringify({ profile: 'mailbox', kind: 'message', ...row }) + '\n'));
@@ -88,8 +90,9 @@ try {
     credentials.push(firstSession.token);
     await writeFile(sessionFile, JSON.stringify({ url: current.url, token: firstSession.token,
       expires_at: firstSession.expires_at, started_at: started }), { mode: 0o600, flag: 'wx' });
+    sessionOwned = true;
     await new Promise(resolve => setTimeout(resolve, hold * 1000));
-    await unlink(sessionFile);
+    await unlink(sessionFile); sessionOwned = false;
   }
   for (let index = 0; index < hops; index++) {
     await source.getByRole('button', { name: 'Prepare next session' }).click();
@@ -107,14 +110,18 @@ try {
     await send(source, `Demo continuity check ${index + 1}: same conversation, different entrance.`);
     await snapshot(source, `Handoff ${index + 1} · History survives at the next pod`, current.url);
     const probe = await page();
-    await assert.rejects(probe.goto(retired, { timeout: 8000 }), /ERR_|Timeout/);
+    let failure;
+    try { await probe.goto(retired, { timeout: 8000 }); } catch (error) { failure = String(error); }
+    assert(failure && /ERR_CONNECTION_|ERR_TIMED_OUT|Timeout/.test(failure), 'Old entrance must refuse or time out, not fail TLS verification');
+    retiredEntrances.push({ address: new URL(retired).host, time: new Date().toISOString(),
+      outcome: /Timeout|TIMED_OUT/.test(failure) ? 'navigation_timeout' : 'connection_failure' });
     await probe.close();
   }
   await reporter.getByRole('button', { name: 'Refresh', exact: true }).click();
   await until(async () => assert.match(await reporter.locator('#messages').innerText(), new RegExp(`continuity check ${hops}:`)));
   await snapshot(reporter, 'Reporter · Messages received across every handoff', invitations[1].url);
-  const result = { passed: true, started_at: started, distinct_addresses: hosts.size, handoffs: hops, steps,
-    checks: ['Verified browser TLS', 'Two-person exchange', 'Distinct pod on each handoff', 'History retained', 'Retired entrance unreachable'],
+  const result = { passed: true, started_at: started, distinct_addresses: hosts.size, handoffs: hops, steps, retired_entrances: retiredEntrances,
+    checks: ['Verified browser TLS', 'Two-person exchange', 'Distinct pod on each handoff', 'History retained', 'Old entrance navigation fails after close; core retirement checked separately'],
     limitation: 'Application body byte counts, not encrypted wire bytes. This does not establish traffic indistinguishability.' };
   await Promise.all(pendingResponses); await trace;
   await writeFile(`${output}/walkthrough.json`, JSON.stringify(result, null, 2));
@@ -125,7 +132,7 @@ try {
   await writeFile(`${output}/walkthrough.json`, JSON.stringify({ passed: false, error: message, steps }, null, 2));
   console.error(message); process.exitCode = 1;
 } finally {
-  if (sessionFile) await unlink(sessionFile).catch(() => {});
+  if (sessionOwned) await unlink(sessionFile).catch(() => {});
   await Promise.all(contexts.map(context => context.close())); await browser.close();
   await Promise.all(pendingResponses); await trace;
 }

@@ -11,6 +11,8 @@ Mount the private invitations and CA at `/inputs/invitations.json` and
 directory at `/evidence`. Use `walkthrough/run.sh` as the entrypoint. This first
 checks that the CA is rejected before adding it to a disposable browser trust store.
 Set `STARTED_AT` to the same Unix epoch as an accompanying cover-traffic run.
+An existing trace or result is refused so retries cannot mix evidence. Browser
+navigation failure is correlated with explicit core retirement events in the report.
 
 Build a static report from the real evidence:
 
