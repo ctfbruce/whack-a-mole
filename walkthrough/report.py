@@ -23,6 +23,14 @@ if isinstance(fleet, dict):
     fleet = fleet['nodes']
 events = [json.loads(line) for line in a.events.read_text().splitlines() if line.strip()]
 run = json.loads((a.browser / 'walkthrough.json').read_text())
+begin = run.get('started_at')
+if begin is None:
+    begin = datetime.fromisoformat(run['steps'][0]['time'].replace('Z', '+00:00')).timestamp() if run.get('steps') else 0
+end = (a.browser / 'walkthrough.json').stat().st_mtime
+signed_in = {row.get('address') for row in events if row.get('event') == 'login'
+             and begin <= datetime.fromisoformat(row['time'].replace('Z', '+00:00')).timestamp() <= end}
+visited = run.get('distinct_addresses', len(signed_in))
+handoffs = run.get('handoffs', sum(step['title'].startswith('Handoff ') for step in run.get('steps', [])))
 a.output.parent.mkdir(parents=True, exist_ok=True)
 assets = a.output.parent / 'assets'
 assets.mkdir(exist_ok=True)
@@ -74,6 +82,7 @@ closed = {row.get('address') for row in events if row.get('event') == 'entry_clo
 retired = run.get('retired_entrances', [])
 retirement_matches = len(retired) == run.get('handoffs') and all(row['address'] in closed for row in retired)
 status = 'Verified rehearsal' if run.get('passed') and retirement_matches else 'Incomplete rehearsal'
+failure = '' if run.get('passed') else '<p class="limits">Stopped before the complete tour: ' + e(run.get('notice') or run.get('error', 'Evidence incomplete').splitlines()[0]) + '</p>'
 checks = ''.join(f'<li>{e(check)}</li>' for check in run.get('checks', []))
 checks += '<li>' + ('Every predecessor also has a matching explicit core retirement event.' if retirement_matches
                     else 'Core retirement evidence is incomplete for this browser run.') + '</li>'
@@ -89,7 +98,7 @@ section{{background:white;border:1px solid #dce5eb;border-radius:18px;padding:28
 .message{{background:#f3f7fa;border-radius:10px;padding:15px 18px;margin:10px 0}}.message small{{margin-left:15px}}.message p{{white-space:pre-wrap;margin-bottom:0}}
 @media(max-width:800px){{main{{padding:24px 14px}}section{{padding:18px}}.nodes{{grid-template-columns:repeat(2,minmax(0,1fr))}}.walkthrough{{display:block}}.steps{{flex-direction:row;overflow:auto;margin-bottom:16px}}.step{{min-width:160px}}.stats{{gap:8px}}.stat{{padding:14px}}.stat strong{{font-size:24px}}.flow{{gap:8px}}.flow div{{padding:12px;font-size:12px}}}}
 </style><main><header class="hero"><span class="eyebrow">Ephemeral mailbox · Private evidence</span><h1>One conversation.<br>Different entrances.</h1><p>A real browser follows temporary addresses across an owned fleet. Messages stay at the trusted core while individual Debuglet relays come and go.</p><span class="status">{e(status)}</span></header>
-<div class="stats"><div class="stat"><strong>{run.get('distinct_addresses', '—')}</strong><span>distinct addresses visited</span></div><div class="stat"><strong>{run.get('handoffs', '—')}</strong><span>verified handoffs</span></div><div class="stat"><strong>{counts['message_stored']}</strong><span>recorded message writes</span></div></div>
+{failure}<div class="stats"><div class="stat"><strong>{visited}</strong><span>distinct addresses signed into</span></div><div class="stat"><strong>{handoffs}</strong><span>successful handoffs captured</span></div><div class="stat"><strong>{counts['message_stored']}</strong><span>recorded message writes</span></div></div>
 <section><h2>The deployment</h2><div class="flow"><div><b>Trusted core</b>Identity, messages, TLS</div><em>↔</em><div><b>Ephemeral relay</b>Opaque bytes in WASM</div><em>↔</em><div><b>Browser</b>Address + passphrase</div></div><div class="nodes">{nodes}</div><p>These are the fleet's recorded public addresses. Separate IPv4 pod addresses stand in for distinct IPv6 entrances; this is not a public IPv6 test. Counts describe this captured rehearsal, not current availability.</p></section>
 <section><h2>The user's view</h2><p>The same conversation follows the user. Successor credentials are deliberately masked in these screenshots.</p><div class="walkthrough"><nav class="steps">{buttons}</nav><div>{screenshots}</div></div></section>
 <section><h2>The core's view</h2><p>Actual lifecycle and storage events. No passphrases, session tokens or message contents appear in this event view.</p><div class="scroll"><table><thead><tr><th>UTC time</th><th>Event</th><th>Node</th><th>Entrance</th><th>Participant</th><th>Detail</th></tr></thead><tbody>{timeline}</tbody></table></div></section>
