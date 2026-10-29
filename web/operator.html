@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Core · Whack-a-mole</title>
+  <link rel="stylesheet" href="/operator/operator.css">
+  <script src="/operator/operator.js" defer></script>
+</head>
+<body>
+<main>
+  <header class="topbar">
+    <div><p class="eyebrow">WHACK-A-MOLE</p><h1>Core</h1><p class="subtitle">Conversations and their changing entrances.</p></div>
+    <div id="session" class="session" hidden><span id="connection" role="status" class="connection">Connecting</span><button id="logout" class="secondary">Sign out</button></div>
+  </header>
+  <section id="login-panel" class="login panel">
+    <span class="eyebrow">PRIVATE OPERATOR VIEW</span><h2>Open the core dashboard</h2>
+    <p class="muted">Use the dedicated operator key. It stays in this page’s memory and is cleared when you leave.</p>
+    <form id="login-form"><label for="operator-key">Operator key</label><input id="operator-key" type="password" required autocomplete="off" spellcheck="false"><button id="sign-in">Open dashboard</button></form>
+  </section>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <div id="dashboard" hidden>
+    <div class="summary" aria-label="Overview"><div><strong id="conversation-count">0</strong><span>conversations</span></div><div><strong id="active-count">0</strong><span>active entrances</span></div><div><strong id="free-count">0</strong><span>free nodes</span></div><p id="updated" class="muted">Waiting for a snapshot</p></div>
+    <div class="workspace panel">
+      <aside class="conversation-pane"><div class="section-heading"><h2>Inbox</h2><span id="inbox-count" class="count">0</span></div><nav id="conversations" aria-label="Conversations"></nav><p id="no-conversations" class="empty">New arrivals appear here.</p></aside>
+      <section class="thread-pane" aria-label="Selected conversation">
+        <div id="thread-empty" class="thread-empty"><span class="empty-mark" aria-hidden="true">↗</span><h2>Choose a conversation</h2><p class="muted">Read messages and reply directly from the core.</p></div>
+        <div id="thread" hidden>
+          <div class="thread-heading"><div><h2 id="thread-title"></h2><p id="thread-meta" class="muted"></p></div><span class="badge">Core can read messages</span></div>
+          <ol id="messages" aria-label="Messages" aria-live="polite"></ol><p id="no-messages" class="empty">No messages yet.</p>
+          <form id="reply-form"><label for="reply">Reply as Core operator</label><textarea id="reply" rows="3" maxlength="4096" placeholder="Write a reply…" required></textarea><div class="composer-actions"><span class="muted">Stored at the core; available at the next entrance.</span><button id="send-reply">Send reply <span aria-hidden="true">↑</span></button></div></form>
+        </div>
+      </section>
+    </div>
+    <section class="relay-section"><div class="section-heading"><div><h2>Relay nodes</h2><p class="muted">Highlighted entrances belong to the selected conversation.</p></div><span class="legend"><i></i> Selected conversation</span></div><div id="relays" class="relays"></div><p id="no-relays" class="empty" hidden>No relay nodes in this snapshot.</p></section>
+    <details class="lifecycle panel"><summary><span>Lifecycle</span><span id="event-count" class="muted">0 recent events</span></summary><ol id="events" aria-label="Recent lifecycle events"></ol><p id="no-events" class="empty">No events recorded.</p></details>
+    <footer>This trusted core stores message content. This dashboard does not provide anonymity or erase browser and network records.</footer>
+  </div>
+</main>
+</body>
+</html>
