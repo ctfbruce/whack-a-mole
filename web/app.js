@@ -76,7 +76,8 @@
       if (new TextEncoder().encode(text).length > 4096) throw new Error('Keep the message within 4 KiB; non-English characters may use more than one byte.');
       await request('/api/messages', { text });
       if ($('message').value === text) $('message').value = '';
-      notice('Message stored by the core.'); await refresh();
+      notice('Message stored by the core.');
+      try { await refresh(); } catch { notice('Message stored by the core, but the conversation could not refresh. Do not resend; try Refresh.', true); }
     });
   });
   $('prepare').onclick = () => busy($('prepare'), async () => {
@@ -100,5 +101,8 @@
     $('next-url').value = $('next-passphrase').value = ''; $('next-panel').hidden = $('clear').hidden = true;
   };
   window.addEventListener('pagehide', () => { forget(''); $('next-url').value = $('next-passphrase').value = ''; });
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) { $('login-panel').hidden = false; notice('Sign in again to reopen this conversation.'); }
+  });
   setInterval(tick, 1000);
 })();
