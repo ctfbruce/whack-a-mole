@@ -13,7 +13,9 @@ browser → pod's mapped TCP port → relay WASM → SSH tunnel → core TLS lis
 ```
 
 TLS still ends at the core. Pods receive neither mailbox state nor TLS private
-keys. Each pod can carry one live entrance, and only to its configured core
+keys. Pod administrators and the runtime control plane are trusted in this
+rehearsal: the SSH tunnels also expose the private dispatcher to each pod. This
+is not a deployment design for arbitrary untrusted relay hosts. Each pod can carry one live entrance, and only to its configured core
 port. Closing or expiring an entrance closes the public listener and cancels
 that run. A later entrance uses another available pod. Provisioning keeps the
 pods alive until the fleet deadline; it does not allocate a new VM per message.
