@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import socket
 import shlex
 import subprocess
 import time
@@ -30,7 +31,7 @@ def save(path, value):
 def run(args, **kwargs):
     result = subprocess.run(args, capture_output=True, timeout=300, **kwargs)
     if result.returncode:
-        raise RuntimeError('Remote setup failed; inspect the private setup log')
+        raise RuntimeError(f'Remote setup command failed (exit {result.returncode})')
     return result.stdout
 
 
@@ -74,6 +75,22 @@ currency = "TEST"
 '''
 
 
+def wait_controller(node, attempts=40):
+    request = urllib.request.Request(node['runtime_url'] + '/sessions', headers={
+        'Authorization': 'Bearer ' + Path(node['token_file']).read_text().strip()})
+    for _ in range(attempts):
+        try:
+            urllib.request.urlopen(request, timeout=2).close()
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                break  # Authenticated controller is listening; no guest started.
+            raise RuntimeError('Controller readiness returned an unexpected status') from None
+        except OSError:
+            time.sleep(0.5)
+    else:
+        raise RuntimeError('Controller did not become ready; inspect private pod logs')
+
+
 def install(index, pod, args, expires_at):
     folder = args.output / pod['id']
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -115,9 +132,17 @@ def install(index, pod, args, expires_at):
             '-R', f'127.0.0.1:{29301 + index}:[::1]:{29301 + index}', target],
             stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
     save(pidfile, str(process.pid) + '\n')
-    time.sleep(1)
-    if process.poll() is not None:
-        raise RuntimeError('SSH tunnel failed; inspect its private log')
+    for _ in range(40):
+        if process.poll() is not None:
+            raise RuntimeError('SSH tunnel failed; inspect its private log')
+        try:
+            with socket.create_connection(('127.0.0.1', 29401 + index), timeout=0.5):
+                break
+        except OSError:
+            time.sleep(0.5)
+    else:
+        process.terminate()
+        raise RuntimeError('SSH forwarding did not become ready')
     run(options + [target, 'umask 077; mkdir -p /workspace/mailbox/bin /workspace/mailbox/state'])
     files = {args.node: 'bin/node', args.guest: 'bin/relay.wasm', args.executor: 'bin/debuglet-executor',
              Path(__file__).with_name('start-node.sh'): 'start-node.sh'}
@@ -148,19 +173,7 @@ redirect_stderr=true
                'if test -f state/supervisor.pid && kill -0 "$(cat state/supervisor.pid)" 2>/dev/null; then exit 20; fi; '
                'supervisord -c /workspace/mailbox/supervisor.conf')
     run(options + [target, command], input=('\n'.join(hashes) + '\n').encode())
-    request = urllib.request.Request(node['runtime_url'] + '/sessions', headers={
-        'Authorization': 'Bearer ' + Path(node['token_file']).read_text().strip()})
-    for _ in range(40):
-        try:
-            urllib.request.urlopen(request, timeout=2).close()
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
-                break  # Authenticated controller is listening; no guest started.
-            raise RuntimeError('Controller readiness returned an unexpected status') from None
-        except OSError:
-            time.sleep(0.5)
-    else:
-        raise RuntimeError('Controller did not become ready; inspect private pod logs')
+    wait_controller(node)
     print(node['name'] + ' controller ready; real guest validation is separate', flush=True)
     return node
 
@@ -173,6 +186,7 @@ def main():
     parser.add_argument('--node', type=Path, required=True)
     parser.add_argument('--guest', type=Path, required=True)
     parser.add_argument('--executor', type=Path, required=True)
+    parser.add_argument('--only', type=int, choices=range(1, 11), help='Recover one stopped node without changing the other nine')
     args = parser.parse_args()
     args.state, args.output = args.state.resolve(), args.output.resolve()
     inv = json.loads((args.state / 'inventory.json').read_text())
@@ -180,8 +194,12 @@ def main():
     if inv['terminate'] or len(pods) != 10 or len({p['public_ip'] for p in pods}) != 10:
         raise RuntimeError('Require ten live owned pods with distinct public IPs')
     with ThreadPoolExecutor(max_workers=5) as pool:
-        futures = [pool.submit(install, i, pod, args, inv['expires_at']) for i, pod in enumerate(pods)]
+        futures = [pool.submit(install, i, pod, args, inv['expires_at']) for i, pod in enumerate(pods) if args.only is None or args.only == i + 1]
         nodes = [f.result() for f in futures]
+    if args.only:
+        nodes = [json.loads((args.output / p['id'] / 'node.json').read_text()) for p in pods]
+    for node in nodes:
+        wait_controller(node, attempts=1)
     save(args.output / 'fleet.json', [{k: n[k] for k in ('name', 'url', 'backend', 'runtime_url', 'token_file')} for n in nodes])
     print('Fleet saved to ' + str(args.output / 'fleet.json'))
 
