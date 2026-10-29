@@ -90,6 +90,29 @@ logging records entry changes, participant labels, timestamps and byte counts,
 but no credentials or message bodies. This private log reveals the relationship
 between entrances and must not be published.
 
+## First-use enrollment
+
+The optional welcome service lets a visitor request their first entrance directly
+from the core. Run it behind a trusted HTTPS front door, separate from the private
+administration API:
+
+```sh
+mailbox welcome -state .local/core -admin http://127.0.0.1:9200 \
+  -listen 127.0.0.1:29210 -origin https://core.example
+```
+
+The visitor clicks **Create my entrance**, receives an address and passphrase,
+then opens the relay and signs in. The demo CA download is on the welcome page;
+the relay still requires certificate verification in a dedicated test browser.
+The HTTPS front door is trusted with enrollment credentials if it terminates TLS.
+
+Enrollment creates a conversation with two entrances: one for the visitor and one
+for the core operator to reply. Only the visitor's invitation is returned publicly;
+the pair is saved privately under the core's `enrollments/` directory. Enrollment
+is bounded to one request at a time and five attempts per minute, with the normal
+core capacity and expiry limits. Refreshing the welcome page does not recover an
+old mailbox; retain your invitation or prepare a successor inside the mailbox.
+
 ## Lifetime and recovery
 
 - Default entrance lifetime: ten minutes. Set `SESSION_TTL=5m` before `up` to change

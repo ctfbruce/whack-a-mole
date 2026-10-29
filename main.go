@@ -28,7 +28,7 @@ func main() {
 }
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: mailbox serve | create | resume")
+		return errors.New("usage: mailbox serve | welcome | create | resume")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	dir := flags.String("state", ".local/core", "private state directory")
@@ -43,8 +43,12 @@ func run(args []string) error {
 	names := flags.String("names", "Source,Reporter", "two participant names")
 	fleetPath := flags.String("fleet", "", "private configuration for owned remote entrances")
 	eventsPath := flags.String("events", "", "optional private JSONL demonstration log")
+	origin := flags.String("origin", "", "public HTTPS origin for the welcome service")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
+	}
+	if args[0] == "welcome" {
+		return serveWelcome(*dir, *admin, *listen, *origin)
 	}
 	if args[0] != "serve" && args[0] != "create" && args[0] != "resume" {
 		return errors.New("unknown command")

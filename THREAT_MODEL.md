@@ -11,6 +11,10 @@ Neither mode establishes anonymity or censorship resistance.
   participant identities, session credentials, and the mapping between entries.
 - Initial invitations and the private CA certificate arrive through an authentic,
   confidential channel. This prototype does not solve that bootstrap problem.
+- The optional welcome page supplies the initial invitation over the configured
+  HTTPS front door. Any proxy terminating that TLS connection is trusted with the
+  first passphrase and CA download. The rehearsal uses such a trusted bootstrap
+  provider; later relay connections still terminate TLS at the core.
 - The browser, operating system, and user device are uncompromised. The browser
   validates the entry's IP address against its certificate and trusts the intended
   private CA for this test. Certificate warnings must not be bypassed.
