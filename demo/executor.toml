@@ -1,0 +1,28 @@
+[identity]
+executor_id = "e96cd359-f488-4cef-a4d1-3a2e1c869739"
+version = "mailbox-research"
+[dispatcher]
+addr = "127.0.0.1:9001"
+yamux_addr = "127.0.0.1:9000"
+[tls]
+disable = true
+[resources]
+capacity = 1000000000
+max_debuglets = 16
+[tesla]
+epoch_seconds = 1
+[network]
+packet_counter = "fallback"
+disable_scion_environment = true
+public_host = "::1"
+public_ports = "20000-20063"
+[network.policy]
+local_targets = true
+[logging]
+log_level = "warn"
+json_logs = true
+[database]
+path = "/state/executor.sqlite"
+[pricing]
+price_per_bw_s = 1
+currency = "TEST"

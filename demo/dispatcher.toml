@@ -1,0 +1,18 @@
+[server]
+version = "mailbox-research"
+bind_host = "127.0.0.1"
+http_port = 9000
+grpc_port = 9001
+local_development = true
+[logging]
+log_level = "warn"
+json_logs = true
+[scheduler]
+executor_timeout = 60
+scheduler_granularity_ms = 100
+[tls]
+disable = true
+[database]
+path = "/state/dispatcher.sqlite"
+[sui]
+disabled = true
