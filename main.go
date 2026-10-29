@@ -88,6 +88,10 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	operatorToken, err := ensureToken(filepath.Join(*dir, "operator.token"))
+	if err != nil {
+		return err
+	}
 	c := &Core{store: store, ca: ca, prefix: prefix.Masked(), ttl: *ttl, hops: make(map[string]*Hop)}
 	if *fleetPath != "" {
 		c.fleet, c.runtime, err = loadFleet(*fleetPath)
@@ -118,7 +122,10 @@ func run(args []string) error {
 		}
 		c.events = file
 	}
-	server := &http.Server{Addr: *listen, Handler: c.admin(adminToken), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 100 * time.Second, MaxHeaderBytes: 8192}
+	mux := http.NewServeMux()
+	mux.Handle("/operator/", c.operator(operatorToken))
+	mux.Handle("/", c.admin(adminToken))
+	server := &http.Server{Addr: *listen, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 100 * time.Second, MaxHeaderBytes: 8192}
 	listener, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return err

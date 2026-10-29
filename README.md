@@ -120,6 +120,32 @@ is bounded to one request at a time and five attempts per minute, with the norma
 core capacity and expiry limits. Refreshing the welcome page does not recover an
 old mailbox; retain your invitation or prepare a successor inside the mailbox.
 
+## Core operator dashboard
+
+The core serves a private dashboard at `http://127.0.0.1:9200/operator/` on its
+existing administration listener. Use the port selected with `serve -listen`.
+Sign in with the separate `operator.token` file in the core's state directory.
+The dashboard shows conversations and relay availability, and lets the core
+operator reply. Replies are stored in the same conversation and appear when the
+visitor refreshes their messages. The activity feed covers the latest one hundred
+events since the core started.
+
+For a remote core, forward its loopback port over SSH:
+
+```sh
+ssh -L 19320:127.0.0.1:9200 operator@core-host
+```
+
+Then open `http://127.0.0.1:19320/operator/`. Keep the SSH connection open. Retrieve
+the operator key through that trusted host connection; do not put it in a URL.
+The page retains the key only in memory and clears it on logout or navigation.
+It refreshes every five seconds and marks lost connections explicitly.
+
+Do not publish or reverse-proxy this listener. The operator key permits reading
+all conversations and replying as **Core operator**; it cannot issue invitations.
+The separate `admin.token` controls provisioning. Neither belongs on the public
+welcome page. Messages remain readable by the trusted core and on its disk.
+
 ## Lifetime and recovery
 
 - Default entrance lifetime: ten minutes. Set `SESSION_TTL=5m` before `up` to change
@@ -151,6 +177,7 @@ There is no frontend framework or database server.
 | `main.go`, `runtime.go` | Local administrative CLI and runtime connection |
 | `fleet.go`, `events.go` | Remote entrance allocation and optional private telemetry |
 | `welcome.go` | Public first-use enrollment, separate from the private administrator API |
+| `operator.go` | Private conversation dashboard and core operator replies |
 | `relay/main.go` | Opaque TCP forwarding inside the real WASM guest |
 | `relay/cmd/node/` | Guest submission, IPv6 aliases and connection cleanup |
 | `web/` | Small browser mailbox |

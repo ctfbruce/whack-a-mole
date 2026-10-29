@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   let token = '', generation = 0, selected = '', snapshot = null, lastUpdate = 0, offline = false;
-  let flight = null, controller = null, sending = false, threadVersion = '', threadConversation = ''; 
+  let flight = null, controller = null, sending = false, threadVersion = '', threadConversation = '';
   const drafts = new Map();
   const el = (tag, text, className) => {
     const node = document.createElement(tag);

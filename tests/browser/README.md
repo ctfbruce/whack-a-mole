@@ -17,3 +17,19 @@ page restoration. Runtime tests separately establish endpoint and relay removal.
 
 This does not establish forensic erasure, censorship resistance or public IPv6
 reachability. Browser restoration is simulated; no forensic claim follows from it.
+
+`operator.mjs` checks the operator dashboard against intercepted responses, with
+no live credentials or core. It covers polling, draft preservation, ambiguous
+replies, logout, expired credentials, literal rendering and mobile layout. With
+the browser image above already built, run from the repository root:
+
+```sh
+mkdir -p .local/operator-evidence
+docker run --rm --network none --cpus=2 --memory=2g \
+  -v "$PWD/tests/browser/operator.mjs:/check/operator.mjs:ro" \
+  -v "$PWD/web:/web:ro" -v "$PWD/.local/operator-evidence:/evidence" \
+  --entrypoint node ephemeral-mailbox-browser:local /check/operator.mjs
+```
+
+These UI checks do not replace an actual visitor-to-core message and reply
+rehearsal. Backend tests separately exercise the operator API and visitor TLS.
